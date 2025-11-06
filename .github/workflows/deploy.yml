@@ -26,6 +26,11 @@ env:
 #    REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
 #    REGISTRY_REPOSITORY: "dev-pipeline-docker-docker"
 
-
-
+jobs:
+  build:
+    name: Build Application
+    uses: ./.github/workflows/build-application.yml
+    with:
+      java-version: '17'
+      maven-version: '3.8.6'
 
