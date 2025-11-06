@@ -1,0 +1,31 @@
+
+name: CI/CD Pipeline
+
+#Se declaran los eventos y las ramas que disparan el workflow
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      override_gates:
+        description: 'Anulación de la puerta de despliegue seguro (solo para despliegue de emergencia)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+  
+env:
+    JAVA_VERSION: '17'
+    MAVEN_VERSION: '3.8.6'
+    DOCKER_BUILDKIT: 1
+#    PDP_URL: http://localhost:7766
+#    REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
+#    REGISTRY_REPOSITORY: "dev-pipeline-docker-docker"
+
+
+
+
