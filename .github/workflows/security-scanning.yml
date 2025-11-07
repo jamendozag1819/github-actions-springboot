@@ -63,9 +63,10 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
+          chmod +x mvnw
           chmod +x snyk-scanning/scripts/validate-snyk.sh
           ./snyk-scanning/scripts/validate-snyk.sh
-
+          ./mvnw clean install	
       - name: Run Snyk security scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
