@@ -7,7 +7,7 @@ on:
         required: false
         type: string
         default: '17'
-      call-unit-tests:
+      coverage-threshold:
         description: 'Minimum coverage threshold percentage'
         required: false
         type: number
