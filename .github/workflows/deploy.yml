@@ -42,6 +42,9 @@ jobs:
     name: Snyk Analysis
     needs: [build, unit-tests]
     uses: ./.github/workflows/security-scanning.yml
+    permissions:
+      contents: read
+      security-events: write
     with:
       java-version: '17'
       run-container-scan: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
