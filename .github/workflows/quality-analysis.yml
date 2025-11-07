@@ -106,15 +106,14 @@ jobs:
             mvn sonar:sonar \
               -Dsonar.host.url=https://sonarcloud.io \
               -Dsonar.token=$SONAR_TOKEN \
-              -Dsonar.organization=${SONAR_ORGANIZATION:jamendozag1819} \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY:github-actions-springboot} \
+              -Dsonar.organization=${SONAR_ORGANIZATION:-your-organization-key} \
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY:-cicd-pipeline-poc} \
               -Dsonar.projectName="CI/CD Pipeline Security POC" \
               -Dsonar.projectVersion=1.0.0 \
               -Dsonar.java.binaries=target/classes \
               -Dsonar.qualitygate.wait=true \
               -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
             
-            cd ..
             
             # Capture quality gate status with better error handling
             if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
