@@ -98,7 +98,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          
+          mvn clean package
           echo "🔍 Running Snyk Code analysis for security issues in source code..."
           
           # Run Snyk Code test (SAST)
