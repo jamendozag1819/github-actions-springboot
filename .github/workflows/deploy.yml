@@ -42,4 +42,3 @@ jobs:
         java-version: '17'
         coverage-threshold: 50
         fail-on-coverage: false
-        maven-version: '3.8.6'
