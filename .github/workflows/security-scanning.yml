@@ -98,20 +98,25 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          mvn clean package
           echo "🔍 Running Snyk Code analysis for security issues in source code..."
           
           # Run Snyk Code test (SAST)
           snyk code test --json > ../snyk-scanning/results/snyk-code-results.json || true
-          
+
+	  - name: Download build artifacts
+	    uses: actions/download-artifact@v4
+	    with:
+	      name: build-artifacts
+	      path: target/
+    
       - name: Build and scan Docker image
         if: inputs.run-container-scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           # Build Docker image
-          docker build -t gating-poc-app:${{ github.sha }} .
-          docker tag gating-poc-app:${{ github.sha }} cicd-poc-app:scan
+          docker build -t api-sprinboot:${{ github.sha }} .
+          docker tag api-sprinboot:${{ github.sha }} cicd-poc-app:scan
           
           # Scan Docker image with Snyk
           echo "🐳 Scanning Docker image for vulnerabilities..."
@@ -123,14 +128,14 @@ jobs:
       - name: Save Docker image for reuse
         if: inputs.run-container-scan
         run: |
-          docker save gating-poc-app:${{ github.sha }} > gating-poc-app-temp.tar
+          docker save api-sprinboot:${{ github.sha }} > api-sprinboot-temp.tar
           
       - name: Upload Docker image artifact
         if: inputs.run-container-scan
         uses: actions/upload-artifact@v4
         with:
           name: docker-image-temp
-          path: gating-poc-app-temp.tar
+          path: api-sprinboot-temp.tar
           retention-days: 1
           
       - name: Generate security summary
