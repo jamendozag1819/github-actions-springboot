@@ -88,11 +88,11 @@ jobs:
       - name: Send results to Snyk UI (Monitor)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           echo "📤 Sending scan results to Snyk dashboard..."
-		  echo "pwd"
-		  ls -la
+          echo "pwd"
+          ls -la
           snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
           
       - name: Run Snyk Code Analysis (SAST)
