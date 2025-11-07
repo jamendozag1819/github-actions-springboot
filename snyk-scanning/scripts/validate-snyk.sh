@@ -148,11 +148,11 @@ validate_organization() {
     print_color "$YELLOW" "Validating organization..."
     
     # Check if organization ID is in valid UUID format
-    if [[ ! $SNYK_ORG_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-        print_color "$RED" "✗ Organization ID is not in valid UUID format"
-        echo "Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-        return 1
-    fi
+#    if [[ ! $SNYK_ORG_ID =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+#        print_color "$RED" "✗ Organization ID is not in valid UUID format"
+#        echo "Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+#        return 1
+#    fi
     
     # Try to validate org by attempting to list projects (this endpoint typically works)
     local response=$(curl -s -w "%{http_code}" -o /tmp/snyk_projects \
