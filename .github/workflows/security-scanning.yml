@@ -66,7 +66,7 @@ jobs:
           chmod +x mvnw
           chmod +x snyk-scanning/scripts/validate-snyk.sh
           ./snyk-scanning/scripts/validate-snyk.sh
-          ./mvnw clean install	
+          
       - name: Run Snyk security scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -82,12 +82,7 @@ jobs:
           mkdir -p snyk-scanning/results
           
           # Mostrar ruta actual
-          echo "📍 Current working directory: $(pwd)"
-
-          # Listar archivos en el directorio
-          echo "📂 Files in current directory:"
-          ls -la
-          ./mvnw dependency:tree -DoutputType=dot --batch-mode --non-recursive --file="pom.xml"
+          #echo "📍 Current working directory: $(pwd)"
 
           # Run Snyk test and capture results
           
