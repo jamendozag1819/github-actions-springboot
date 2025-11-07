@@ -93,12 +93,12 @@ jobs:
           echo "📤 Sending scan results to Snyk dashboard..."
           snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
           
-	  - name: Run Snyk Code Analysis (SAST)
-	    env:
-	      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-	    run: |
-	      echo "🔍 Running Snyk Code analysis for security issues in source code..."
-	      snyk code test --json > ../snyk-scanning/results/snyk-code-results.json || true
+      - name: Run Snyk Code Analysis (SAST)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          echo "🔍 Running Snyk Code analysis for security issues in source code..."
+          snyk code test --json > ../snyk-scanning/results/snyk-code-results.json || true
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
