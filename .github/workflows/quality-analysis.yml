@@ -106,8 +106,8 @@ jobs:
             mvn sonar:sonar \
               -Dsonar.host.url=https://sonarcloud.io \
               -Dsonar.token=$SONAR_TOKEN \
-              -Dsonar.organization=${SONAR_ORGANIZATION:-your-organization-key} \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY:-cicd-pipeline-poc} \
+              -Dsonar.organization=${SONAR_ORGANIZATION:jamendozag1819} \
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY:github-actions-springboot} \
               -Dsonar.projectName="CI/CD Pipeline Security POC" \
               -Dsonar.projectVersion=1.0.0 \
               -Dsonar.java.binaries=target/classes \
