@@ -86,7 +86,8 @@ jobs:
           # Listar archivos en el directorio
           echo "📂 Files in current directory:"
           ls -la
-            
+          ./mvnw dependency:tree -DoutputType=dot --batch-mode --non-recursive --file="pom.xml"
+
           # Run Snyk test and capture results
           
           echo "🔍 Running Snyk dependency scan..."
