@@ -85,7 +85,13 @@ jobs:
 
           echo "📊 Checking Snyk results file..."
           ls -la snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
-          
+      
+      - name: 📈 Upload results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-scanning/results/snyk-results.sarif
+    
       - name: Send results to Snyk UI (Monitor)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
         env:
