@@ -1,7 +1,5 @@
-
 name: CI/CD Pipeline
 
-#Se declaran los eventos y las ramas que disparan el workflow
 on:
   push:
     branches: [ main ]
@@ -17,14 +15,11 @@ on:
         options:
           - 'false'
           - 'true'
-  
+
 env:
-    JAVA_VERSION: '17'
-    MAVEN_VERSION: '3.8.6'
-    DOCKER_BUILDKIT: 1
-#    PDP_URL: http://localhost:7766
-#    REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
-#    REGISTRY_REPOSITORY: "dev-pipeline-docker-docker"
+  JAVA_VERSION: '17'
+  MAVEN_VERSION: '3.8.6'
+  DOCKER_BUILDKIT: 1
 
 jobs:
   build:
@@ -44,13 +39,12 @@ jobs:
       fail-on-coverage: false
 
   security-scan:
-      name: Snyk Analysis
-      needs: [build, unit-tests]
-      uses: ./.github/workflows/security-scanning.yml
-      with:
-        java-version: '17'
-        run-container-scan: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-      secrets:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
-	  
+    name: Snyk Analysis
+    needs: [build, unit-tests]
+    uses: ./.github/workflows/security-scanning.yml
+    with:
+      java-version: '17'
+      run-container-scan: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
