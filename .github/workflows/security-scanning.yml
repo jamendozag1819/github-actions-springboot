@@ -81,7 +81,7 @@ jobs:
           
           echo "🔍 Running Snyk dependency scan..."
           snyk test --json > snyk-scanning/results/snyk-results.json || echo "⚠️ Snyk test completed with exit code $?"
-          snyk test --sarif > snyk-scanning/results/snyk-results.sarif || true
+          snyk test --sarif-file-output > snyk-scanning/results/snyk-results.sarif || true
 
           echo "📊 Checking Snyk results file..."
           ls -la snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
