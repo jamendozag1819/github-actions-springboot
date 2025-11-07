@@ -1,4 +1,4 @@
-- name: Verificar cobertura con JaCoCo
+name: Verificar cobertura con JaCoCo
   run: |
           echo "Verificando cobertura de código..."
           JACOCO_FILE=target/site/jacoco/jacoco.xml
