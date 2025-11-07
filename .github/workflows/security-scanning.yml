@@ -91,6 +91,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           echo "📤 Sending scan results to Snyk dashboard..."
+		  echo "pwd"
           snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
           
       - name: Run Snyk Code Analysis (SAST)
