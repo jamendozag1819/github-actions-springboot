@@ -11,13 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(Controller.class)
 public class ControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+	@Autowired
+	private MockMvc mockMvc;
 
-    @Test
-    public void testMensajeEndpoint() throws Exception {
-        mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Prueba controller"));
-    }
+	@Test
+	public void testMensajeEndpoint() throws Exception {
+		mockMvc.perform(get("/")).andExpect(status().isOk()).andExpect(content().string("Prueba controller"));
+	}
 }

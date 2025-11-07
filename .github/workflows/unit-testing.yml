@@ -7,7 +7,7 @@ on:
         required: false
         type: string
         default: '17'
-      coverage-threshold:
+      call-unit-tests:
         description: 'Minimum coverage threshold percentage'
         required: false
         type: number
@@ -76,7 +76,7 @@ jobs:
       - name: Verify build prerequisites
         run: |
           echo "🔍 Verifying build prerequisites for testing..."
-          cd microservice-moc-app
+          cd api-sprinboot
           
           # Check if we have compiled classes
           if [ ! -d "target/classes" ]; then
@@ -101,7 +101,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "🧪 Running unit tests with coverage..."
-          cd microservice-moc-app
+          cd api-sprinboot
           
           # Set test profile if specified
           PROFILE_ARG=""
@@ -139,10 +139,10 @@ jobs:
         if: always()
         uses: ./.github/actions/process-test-results
         with:
-          test-reports-path: microservice-moc-app/target/surefire-reports
-          coverage-reports-path: microservice-moc-app/target/site/jacoco
+          test-reports-path: api-sprinboot/target/surefire-reports
+          coverage-reports-path: api-sprinboot/target/site/jacoco
           coverage-threshold: ${{ inputs.coverage-threshold }}
-          project-path: microservice-moc-app
+          project-path: api-sprinboot
 
       - name: Determine overall test status
         id: determine_status
@@ -188,8 +188,8 @@ jobs:
           name: test-results
           path: |
             test-results/
-            microservice-moc-app/target/surefire-reports/
-            microservice-moc-app/target/site/jacoco/
+            api-sprinboot/target/surefire-reports/
+            api-sprinboot/target/site/jacoco/
           retention-days: 3
           
       - name: Generate concise test summary
