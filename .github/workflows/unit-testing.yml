@@ -45,7 +45,6 @@ jobs:
           echo "Fail on low coverage: ${{ inputs.fail-on-coverage }}"
 
       # Aquí podrías agregar lógica para verificar la cobertura y fallar si es necesario
-	  
 	  - name: Verificar cobertura con JaCoCo
         run: |
           echo "Verificando cobertura de código..."
