@@ -126,6 +126,6 @@ runs:
         # Add scan metadata
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📝 Scan Details" >> $GITHUB_STEP_SUMMARY
-        echo "- **Project:** microservice-moc-app" >> $GITHUB_STEP_SUMMARY
+        echo "- **Project:** api-springboot" >> $GITHUB_STEP_SUMMARY
         echo "- **Type:** Dependencies (Maven)" >> $GITHUB_STEP_SUMMARY
         echo "- **Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
