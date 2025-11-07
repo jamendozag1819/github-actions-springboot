@@ -67,7 +67,7 @@ jobs:
           ./snyk-scanning/scripts/validate-snyk.sh
 
       - name: Run Snyk security scan
-        working-directory: ../
+        working-directory: ./
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
