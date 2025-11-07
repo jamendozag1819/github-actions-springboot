@@ -76,7 +76,7 @@ jobs:
       - name: Verify build prerequisites
         run: |
           echo "🔍 Verifying build prerequisites for testing..."
-          cd api-sprinboot
+          cd api-springboot
           
           # Check if we have compiled classes
           if [ ! -d "target/classes" ]; then
@@ -101,7 +101,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "🧪 Running unit tests with coverage..."
-          cd api-sprinboot
+          cd api-springboot
           
           # Set test profile if specified
           PROFILE_ARG=""
@@ -139,10 +139,10 @@ jobs:
         if: always()
         uses: ./.github/actions/process-test-results
         with:
-          test-reports-path: api-sprinboot/target/surefire-reports
-          coverage-reports-path: api-sprinboot/target/site/jacoco
+          test-reports-path: api-springboot/target/surefire-reports
+          coverage-reports-path: api-springboot/target/site/jacoco
           coverage-threshold: ${{ inputs.coverage-threshold }}
-          project-path: api-sprinboot
+          project-path: api-springboot
 
       - name: Determine overall test status
         id: determine_status
@@ -188,8 +188,8 @@ jobs:
           name: test-results
           path: |
             test-results/
-            api-sprinboot/target/surefire-reports/
-            api-sprinboot/target/site/jacoco/
+            api-springboot/target/surefire-reports/
+            api-springboot/target/site/jacoco/
           retention-days: 3
           
       - name: Generate concise test summary

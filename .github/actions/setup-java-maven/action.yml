@@ -28,7 +28,7 @@ runs:
       with:
         path: |
           ~/.m2/repository
-          microservice-moc-app/target
+          api-springboot/target
         key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}-${{ hashFiles('microservice-moc-app/src/**') }}
         restore-keys: |
           ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}-
