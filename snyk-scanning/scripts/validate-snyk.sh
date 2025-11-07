@@ -207,7 +207,7 @@ test_vulnerability_scan() {
     
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local project_root="$(cd "$script_dir/../.." && pwd)"
-    local app_dir="$project_root/microservice-moc-app"
+    local app_dir="$project_root/"
     
     if [ -d "$app_dir" ]; then
         cd "$app_dir"
@@ -230,7 +230,7 @@ test_vulnerability_scan() {
         
         cd "$script_dir"
     else
-        print_color "$YELLOW" "⚠ microservice-moc-app directory not found, skipping scan test"
+        print_color "$YELLOW" "⚠ directory not found, skipping scan test"
     fi
 }
 
