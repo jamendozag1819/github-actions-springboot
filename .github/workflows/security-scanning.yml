@@ -80,10 +80,10 @@ jobs:
           # Run Snyk test and capture results
           
           echo "🔍 Running Snyk dependency scan..."
-          snyk test --json > ../snyk-scanning/results/snyk-results.json || echo "⚠️ Snyk test completed with exit code $?"
+          snyk test --json > snyk-scanning/results/snyk-results.json || echo "⚠️ Snyk test completed with exit code $?"
           
           echo "📊 Checking Snyk results file..."
-          ls -la ../snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
+          ls -la snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
           
       - name: Send results to Snyk UI (Monitor)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
@@ -98,7 +98,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           echo "🔍 Running Snyk Code analysis for security issues in source code..."
-          snyk code test --json > ../snyk-scanning/results/snyk-code-results.json || true
+          snyk code test --json > snyk-scanning/results/snyk-code-results.json || true
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -117,7 +117,7 @@ jobs:
           
           # Scan Docker image with Snyk
           echo "🐳 Scanning Docker image for vulnerabilities..."
-          snyk container test cicd-poc-app:scan --json > ../snyk-scanning/results/snyk-container-results.json || true
+          snyk container test cicd-poc-app:scan --json > snyk-scanning/results/snyk-container-results.json || true
           
           # Send container results to Snyk UI
           snyk container monitor cicd-poc-app:scan --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-container" || true
