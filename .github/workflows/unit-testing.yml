@@ -100,7 +100,6 @@ jobs:
         continue-on-error: true
         run: |
           echo "🧪 Running unit tests with coverage..."
-          cd api-springboot
           
           # Set test profile if specified
           PROFILE_ARG=""
