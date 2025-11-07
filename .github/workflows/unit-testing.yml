@@ -76,7 +76,6 @@ jobs:
       - name: Verify build prerequisites
         run: |
           echo "🔍 Verifying build prerequisites for testing..."
-          cd api-springboot
           
           # Check if we have compiled classes
           if [ ! -d "target/classes" ]; then
