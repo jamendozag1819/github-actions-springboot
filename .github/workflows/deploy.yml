@@ -35,10 +35,22 @@ jobs:
       maven-version: '3.8.6'
 
   unit-tests:
-      name: Unit Tests & Coverage
-      needs: build
-      uses: ./.github/workflows/unit-testing.yml
+    name: Unit Tests & Coverage
+    needs: build
+    uses: ./.github/workflows/unit-testing.yml
+    with:
+      java-version: '17'
+      coverage-threshold: 50
+      fail-on-coverage: false
+
+  security-scan:
+      name: Snyk Analysis
+      needs: [build, unit-tests]
+      uses: ./.github/workflows/security-scanning.yml
       with:
         java-version: '17'
-        coverage-threshold: 50
-        fail-on-coverage: false
+        run-container-scan: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+      secrets:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+	  
