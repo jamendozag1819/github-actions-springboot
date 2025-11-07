@@ -51,3 +51,14 @@ jobs:
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+  
+  code-quality:
+    name: SonarQube Cloud Analysis
+    needs: [build, unit-tests]
+    uses: ./.github/workflows/quality-analysis.yml
+    with:
+      java-version: '17'
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
