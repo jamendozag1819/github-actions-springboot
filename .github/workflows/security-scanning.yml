@@ -67,7 +67,6 @@ jobs:
           ./snyk-scanning/scripts/validate-snyk.sh
 
       - name: Run Snyk security scan
-        working-directory: ./
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
@@ -81,6 +80,13 @@ jobs:
           # Ensure results directory exists
           mkdir -p snyk-scanning/results
           
+          # Mostrar ruta actual
+          echo "📍 Current working directory: $(pwd)"
+
+          # Listar archivos en el directorio
+          echo "📂 Files in current directory:"
+          ls -la
+            
           # Run Snyk test and capture results
           
           echo "🔍 Running Snyk dependency scan..."
