@@ -1,34 +1,246 @@
-name: Verificar cobertura con JaCoCo
-run: |
-          echo "Verificando cobertura de código..."
-          JACOCO_FILE=target/site/jacoco/jacoco.xml
+name: 'Unit Testing'
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: 'Java version to use'
+        required: false
+        type: string
+        default: '17'
+      coverage-threshold:
+        description: 'Minimum coverage threshold percentage'
+        required: false
+        type: number
+        default: 50
+      test-profile:
+        description: 'Maven test profile to use'
+        required: false
+        type: string
+        default: 'default'
+      fail-on-coverage:
+        description: 'Whether to fail if coverage threshold is not met'
+        required: false
+        type: boolean
+        default: false
+        
+    outputs:
+      tests-passed:
+        description: 'Whether all tests passed'
+        value: ${{ jobs.unit-tests.outputs.tests-passed }}
+      tests-total:
+        description: 'Total number of tests executed'
+        value: ${{ jobs.unit-tests.outputs.tests-total }}
+      coverage-percent:
+        description: 'Code coverage percentage'
+        value: ${{ jobs.unit-tests.outputs.coverage-percent }}
+      coverage-threshold-met:
+        description: 'Whether coverage threshold was met'
+        value: ${{ jobs.unit-tests.outputs.coverage-threshold-met }}
+      test-artifacts-ready:
+        description: 'Whether test artifacts are ready for quality tools'
+        value: ${{ jobs.unit-tests.outputs.test-artifacts-ready }}
+      test-status:
+        description: 'Overall test status (PASSED/WARNING/FAILED)'
+        value: ${{ jobs.unit-tests.outputs.test-status }}
 
-          if [ ! -f "$JACOCO_FILE" ]; then
-            echo "❌ No se encontró el archivo de cobertura: $JACOCO_FILE"
-            exit 1
-          fi
-
-          COVERED=$(xmllint --xpath "string(//counter[@type='INSTRUCTION']/@covered)" $JACOCO_FILE)
-          MISSED=$(xmllint --xpath "string(//counter[@type='INSTRUCTION']/@missed)" $JACOCO_FILE)
-
-          TOTAL=$((COVERED + MISSED))
-          if [ "$TOTAL" -eq 0 ]; then
-            COVERAGE=0
+jobs:
+  unit-tests:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    
+    outputs:
+      tests-passed: ${{ steps.process_results.outputs.tests-passed }}
+      tests-total: ${{ steps.process_results.outputs.tests-total }}
+      tests-failed: ${{ steps.process_results.outputs.tests-failed }}
+      tests-skipped: ${{ steps.process_results.outputs.tests-skipped }}
+      coverage-percent: ${{ steps.process_results.outputs.coverage-percent }}
+      coverage-lines-covered: ${{ steps.process_results.outputs.coverage-lines-covered }}
+      coverage-lines-total: ${{ steps.process_results.outputs.coverage-lines-total }}
+      coverage-threshold-met: ${{ steps.process_results.outputs.coverage-threshold-met }}
+      test-artifacts-ready: ${{ steps.process_results.outputs.test-artifacts-ready }}
+      test-status: ${{ steps.determine_status.outputs.TEST_STATUS }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Java and Maven
+        uses: ./.github/actions/setup-java-maven
+        with:
+          java-version: ${{ inputs.java-version }}
+          
+      - name: Download build artifacts
+        uses: ./.github/actions/download-build-artifacts
+        continue-on-error: true
+        
+      - name: Verify build prerequisites
+        run: |
+          echo "🔍 Verifying build prerequisites for testing..."
+          cd microservice-moc-app
+          
+          # Check if we have compiled classes
+          if [ ! -d "target/classes" ]; then
+            echo "⚠️ No compiled classes found - will compile first"
+            echo "📦 Compiling sources for testing..."
+            mvn compile -q
           else
-            COVERAGE=$(awk "BEGIN { printf \"%.2f\", ($COVERED / ($COVERED + $MISSED)) * 100 }")
+            echo "✅ Compiled classes found"
+            ls -la target/classes/
+          fi
+          
+          # Verify test sources exist
+          if [ -d "src/test/java" ]; then
+            echo "✅ Test sources found:"
+            find src/test/java -name "*.java" | wc -l | xargs echo "   Test files:"
+          else
+            echo "⚠️ No test sources found in src/test/java"
           fi
 
-          echo "✅ Cobertura total: $COVERAGE%"
-          echo "📊 Umbral requerido: ${{ inputs.coverage-threshold }}%"
+      - name: Run Unit Tests
+        id: run_tests
+        continue-on-error: true
+        run: |
+          echo "🧪 Running unit tests with coverage..."
+          cd microservice-moc-app
+          
+          # Set test profile if specified
+          PROFILE_ARG=""
+          if [ "${{ inputs.test-profile }}" != "default" ]; then
+            PROFILE_ARG="-P${{ inputs.test-profile }}"
+            echo "📋 Using test profile: ${{ inputs.test-profile }}"
+          fi
+          
+          # Run tests with coverage
+          echo "🚀 Executing: mvn test jacoco:report $PROFILE_ARG"
+          mvn test jacoco:report $PROFILE_ARG \
+            -Dmaven.test.failure.ignore=false \
+            -Djacoco.skip=false || TEST_EXIT_CODE=$?
+          
+          # Store exit code for later evaluation
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+          
+          # Show test execution summary
+          echo ""
+          echo "📊 Test Execution Summary:"
+          if [ -d "target/surefire-reports" ]; then
+            echo "   JUnit reports: $(ls target/surefire-reports/*.xml 2>/dev/null | wc -l) files"
+          fi
+          if [ -f "target/site/jacoco/jacoco.xml" ]; then
+            echo "   JaCoCo coverage: Generated"
+            echo "   Coverage report size: $(du -h target/site/jacoco/jacoco.xml | cut -f1)"
+          else
+            echo "   JaCoCo coverage: Not generated"
+          fi
+          
+          exit ${TEST_EXIT_CODE:-0}
 
-          if (( $(echo "$COVERAGE < ${{ inputs.coverage-threshold }}" | bc -l) )); then
-            echo "⚠️ La cobertura está por debajo del umbral requerido."
-            if [ "${{ inputs.fail-on-coverage }}" = "true" ]; then
-              echo "❌ Fallando el job debido a cobertura insuficiente."
+      - name: Process test results
+        id: process_results
+        if: always()
+        uses: ./.github/actions/process-test-results
+        with:
+          test-reports-path: microservice-moc-app/target/surefire-reports
+          coverage-reports-path: microservice-moc-app/target/site/jacoco
+          coverage-threshold: ${{ inputs.coverage-threshold }}
+          project-path: microservice-moc-app
+
+      - name: Determine overall test status
+        id: determine_status
+        if: always()
+        run: |
+          echo "🎯 Determining overall test status..."
+          
+          TESTS_PASSED="${{ steps.process_results.outputs.tests-passed }}"
+          COVERAGE_MET="${{ steps.process_results.outputs.coverage-threshold-met }}"
+          TEST_EXIT_CODE="${{ steps.run_tests.outputs.TEST_EXIT_CODE }}"
+          
+          # Determine status based on test results and coverage
+          if [ "$TESTS_PASSED" = "true" ] && [ "$COVERAGE_MET" = "true" ]; then
+            TEST_STATUS="PASSED"
+            STATUS_ICON="✅"
+            STATUS_MESSAGE="All tests passed and coverage threshold met"
+          elif [ "$TESTS_PASSED" = "true" ] && [ "$COVERAGE_MET" = "false" ]; then
+            TEST_STATUS="WARNING" 
+            STATUS_ICON="⚠️"
+            STATUS_MESSAGE="Tests passed but coverage below threshold (${{ inputs.coverage-threshold }}%)"
+          elif [ "$TESTS_PASSED" = "false" ] || [ "${TEST_EXIT_CODE:-0}" -ne 0 ]; then
+            TEST_STATUS="FAILED"
+            STATUS_ICON="❌"
+            STATUS_MESSAGE="Some tests failed or test execution error occurred"
+          else
+            TEST_STATUS="UNKNOWN"
+            STATUS_ICON="❓"
+            STATUS_MESSAGE="Unable to determine test status"
+          fi
+          
+          echo "TEST_STATUS=$TEST_STATUS" >> $GITHUB_OUTPUT
+          echo "STATUS_ICON=$STATUS_ICON" >> $GITHUB_OUTPUT
+          echo "STATUS_MESSAGE=$STATUS_MESSAGE" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "$STATUS_ICON Final Test Status: $TEST_STATUS"
+          echo "📋 $STATUS_MESSAGE"
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            test-results/
+            microservice-moc-app/target/surefire-reports/
+            microservice-moc-app/target/site/jacoco/
+          retention-days: 3
+          
+      - name: Generate concise test summary
+        if: always()
+        run: |
+          # Determine coverage threshold status
+          COVERAGE_STATUS=""
+          if [ "${{ steps.process_results.outputs.coverage-threshold-met }}" = "true" ]; then
+            COVERAGE_STATUS="✅ Met"
+          else
+            COVERAGE_STATUS="⚠️ Below threshold"
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ${{ steps.determine_status.outputs.STATUS_ICON }} Unit Tests & Coverage: **${{ steps.determine_status.outputs.TEST_STATUS }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ steps.process_results.outputs.tests-total }} total, ${{ steps.process_results.outputs.tests-failed }} failed, ${{ steps.process_results.outputs.tests-skipped }} skipped |" >> $GITHUB_STEP_SUMMARY
+          echo "| Coverage | ${{ steps.process_results.outputs.coverage-percent }}% (${{ steps.process_results.outputs.coverage-lines-covered }}/${{ steps.process_results.outputs.coverage-lines-total }} lines) - Threshold (${{ inputs.coverage-threshold }}%): $COVERAGE_STATUS |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Evaluate test status for workflow continuation
+        if: always()
+        run: |
+          TEST_STATUS="${{ steps.determine_status.outputs.TEST_STATUS }}"
+          FAIL_ON_COVERAGE="${{ inputs.fail-on-coverage }}"
+          
+          echo "🎯 Evaluating workflow continuation criteria..."
+          echo "   Test Status: $TEST_STATUS"
+          echo "   Fail on Coverage: $FAIL_ON_COVERAGE"
+          
+          case "$TEST_STATUS" in
+            "PASSED")
+              echo "✅ All criteria met - workflow can continue"
+              exit 0
+              ;;
+            "WARNING")
+              if [ "$FAIL_ON_COVERAGE" = "true" ]; then
+                echo "❌ Coverage threshold not met and fail-on-coverage is enabled"
+                exit 1
+              else
+                echo "⚠️ Coverage warning but continuing (fail-on-coverage: false)"
+                exit 0
+              fi
+              ;;
+            "FAILED")
+              echo "❌ Tests failed - stopping workflow"
               exit 1
-            else
-              echo "🔔 Advertencia: cobertura baja, pero no se fallará el job."
-            fi
-          else
-            echo "✅ Cobertura suficiente. Continuando con el pipeline."
-          fi
+              ;;
+            *)
+              echo "❓ Unknown test status - continuing with caution"
+              exit 0
+              ;;
+          esac
