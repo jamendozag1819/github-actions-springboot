@@ -139,8 +139,8 @@ jobs:
         if: always()
         uses: ./.github/actions/process-test-results
         with:
-          test-reports-path: api-springboot/target/surefire-reports
-          coverage-reports-path: api-springboot/target/site/jacoco
+          test-reports-path: target/surefire-reports
+          coverage-reports-path: target/site/jacoco
           coverage-threshold: ${{ inputs.coverage-threshold }}
           project-path: api-springboot
 
@@ -188,8 +188,8 @@ jobs:
           name: test-results
           path: |
             test-results/
-            api-springboot/target/surefire-reports/
-            api-springboot/target/site/jacoco/
+            target/surefire-reports/
+            target/site/jacoco/
           retention-days: 3
           
       - name: Generate concise test summary
