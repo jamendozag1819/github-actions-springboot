@@ -91,7 +91,7 @@ jobs:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           echo "📤 Sending scan results to Snyk dashboard..."
-          echo pwd
+          pwd
           ls -la
           snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
           
