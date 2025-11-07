@@ -31,8 +31,8 @@ jobs:
     name: Build Application
     uses: ./.github/workflows/build-application.yml
     with:
-      java-version: '17'
-      maven-version: '3.8.6'
+      java-version: ${{ env.JAVA_VERSION }}
+      maven-version: ${{ env.MAVEN_VERSION }}
 
   unit-tests:
       name: Unit Tests & Coverage
