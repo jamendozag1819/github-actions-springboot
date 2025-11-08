@@ -88,22 +88,22 @@ jobs:
             echo "🔍 Verifying Java setup for SonarQube analysis..."
             echo "JAVA_HOME: $JAVA_HOME"
             java -version
-            mvn -version
+            mvnw -version
             
             
             
             # Verify compiled classes exist
             echo "🔍 Verifying compiled classes for SonarQube analysis..."
             ls -la target/classes/ || echo "⚠️ No compiled classes found, will compile first"
-            
+            chmod +x mvnw
             # Ensure classes are compiled for SonarQube analysis
             if [ ! -d "target/classes" ]; then
               echo "📦 Compiling classes for SonarQube analysis..."
-              mvn compile
+              mvnw compile
             fi
-            chmod +x mvn
+            
             # Run SonarQube analysis with quality gate wait
-            ./mvn sonar:sonar \
+            ./mvnw sonar:sonar \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=$SONAR_TOKEN \
             -Dsonar.organization=$SONAR_ORGANIZATION \
