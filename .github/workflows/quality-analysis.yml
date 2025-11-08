@@ -103,16 +103,17 @@ jobs:
             fi
             
             # Run SonarQube analysis with quality gate wait
-            mvn sonar:sonar \
-              -Dsonar.host.url=https://sonarcloud.io \
-              -Dsonar.token=$SONAR_TOKEN \
-              -Dsonar.organization=${SONAR_ORGANIZATION:-your-organization-key} \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY:-cicd-pipeline-poc} \
-              -Dsonar.projectName="CI/CD Pipeline Security POC" \
-              -Dsonar.projectVersion=1.0.0 \
-              -Dsonar.java.binaries=target/classes \
-              -Dsonar.qualitygate.wait=true \
-              -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
+            ./mvnw sonar:sonar \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.organization=$SONAR_ORGANIZATION \
+            -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+            -Dsonar.projectName="CI/CD Pipeline Security POC" \
+            -Dsonar.projectVersion=1.0.0 \
+            -Dsonar.java.binaries=target/classes \
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
+
             
             
             # Capture quality gate status with better error handling
