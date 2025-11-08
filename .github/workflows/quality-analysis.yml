@@ -88,14 +88,13 @@ jobs:
             echo "🔍 Verifying Java setup for SonarQube analysis..."
             echo "JAVA_HOME: $JAVA_HOME"
             java -version
+            chmod +x mvnw
             ./mvnw -version
-            
-            
             
             # Verify compiled classes exist
             echo "🔍 Verifying compiled classes for SonarQube analysis..."
             ls -la target/classes/ || echo "⚠️ No compiled classes found, will compile first"
-            chmod +x mvnw
+            
             # Ensure classes are compiled for SonarQube analysis
             if [ ! -d "target/classes" ]; then
               echo "📦 Compiling classes for SonarQube analysis..."
