@@ -167,8 +167,8 @@ jobs:
         uses: ./.github/actions/generate-quality-summary
         with:
           results-file: sonarqube-cloud-scanning/results/quality-gate-result.json
-          project-key: ${{ secrets.SONAR_PROJECT_KEY }}
-          branch-name: ${{ github.ref_name }}
+          project-key: ${ secrets.SONAR_PROJECT_KEY }
+          branch-name: ${ github.ref_name }
           
       - name: Upload quality results
         uses: actions/upload-artifact@v4
