@@ -31,6 +31,9 @@ jobs:
     name: Code Quality Analysis
     runs-on: ubuntu-latest
     
+    env:
+      SONAR_PROJECT_KEY_DEBUGIN: ${{ secrets.SONAR_PROJECT_KEY }}
+
     outputs:
       quality-gate-status: ${{ steps.sonarqube_scan.outputs.QUALITY_GATE_STATUS }}
       sonarqube-configured: ${{ steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED }}
@@ -59,7 +62,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
         run: |
           chmod +x sonarqube-cloud-scanning/scripts/validate-sonarqube.sh
           
@@ -72,7 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
         run: |
           if [ -z "$SONAR_TOKEN" ] || [ "$SONARQUBE_VALIDATED" = "false" ]; then
             echo "⚠️ SonarQube Cloud not configured or validation failed - skipping code quality analysis"
@@ -106,7 +109,7 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=$SONAR_TOKEN \
             -Dsonar.organization=$SONAR_ORGANIZATION \
-            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY_DEBUGIN}} \
             -Dsonar.projectName="CI/CD Pipeline Security POC" \
             -Dsonar.projectVersion=1.0.0 \
             -Dsonar.java.binaries=target/classes \
@@ -137,7 +140,7 @@ jobs:
             # Disable exit on error temporarily to capture exit code
             set +e
             ./sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh \
-              -k "${SONAR_PROJECT_KEY:-cicd-pipeline-poc}" \
+              -k "${{ env.SONAR_PROJECT_KEY_DEBUGIN }}:-cicd-pipeline-poc}" \
               -o sonarqube-cloud-scanning/results/quality-gate-result.json
             SONAR_GATE_EXIT_CODE=$?
             set -e
@@ -167,8 +170,8 @@ jobs:
         uses: ./.github/actions/generate-quality-summary
         with:
           results-file: sonarqube-cloud-scanning/results/quality-gate-result.json
-          project-key: ${ secrets.SONAR_PROJECT_KEY }
-          branch-name: ${ github.ref_name }
+          project-key: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
+          branch-name: ${{ github.ref_name }}
           
       - name: Upload quality results
         uses: actions/upload-artifact@v4
