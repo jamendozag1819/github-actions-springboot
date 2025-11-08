@@ -101,9 +101,9 @@ jobs:
               echo "📦 Compiling classes for SonarQube analysis..."
               mvn compile
             fi
-            chmod +x mvnw
+            chmod +x mvn
             # Run SonarQube analysis with quality gate wait
-            ./mvnw sonar:sonar \
+            ./mvn sonar:sonar \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=$SONAR_TOKEN \
             -Dsonar.organization=$SONAR_ORGANIZATION \
