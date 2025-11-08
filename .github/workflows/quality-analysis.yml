@@ -88,7 +88,7 @@ jobs:
             echo "🔍 Verifying Java setup for SonarQube analysis..."
             echo "JAVA_HOME: $JAVA_HOME"
             java -version
-            mvnw -version
+            ./mvnw -version
             
             
             
@@ -99,7 +99,7 @@ jobs:
             # Ensure classes are compiled for SonarQube analysis
             if [ ! -d "target/classes" ]; then
               echo "📦 Compiling classes for SonarQube analysis..."
-              mvnw compile
+              ./mvnw compile
             fi
             
             # Run SonarQube analysis with quality gate wait
