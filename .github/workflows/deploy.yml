@@ -62,6 +62,7 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+
   security-gates:
     name: Security Gate Evaluation
     # TEMPORARY: Codacy dependency removed - uncomment line below and comment current line to re-enable
