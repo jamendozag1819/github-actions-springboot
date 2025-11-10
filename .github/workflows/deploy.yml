@@ -62,3 +62,25 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+  security-gates:
+    name: Security Gate Evaluation
+    # TEMPORARY: Codacy dependency removed - uncomment line below and comment current line to re-enable
+    # needs: [security-scan, code-quality, codacy-analysis]
+    needs: [security-scan, code-quality]
+    uses: ./.github/workflows/security-gate-evaluation.yml
+    with:
+      # Dynamic role mapping is now enabled by default
+      # Roles are fetched directly from Permit.io cloud
+      # Optional: Add custom mappings below to override Permit.io roles
+      user-role-mapping: '{}'
+      enable-dynamic-roles: true
+      override-gates: ${{ github.event.inputs.override_gates == 'true' }}
+      enable-quality-gates: true
+      # TEMPORARY: Codacy gates disabled - uncomment line below and comment current line to re-enable
+      # enable-codacy-gates: true
+      enable-codacy-gates: false
+      enable-test-gates: true
+    secrets:
+      PERMIT_API_KEY: ${{ secrets.PERMIT_API_KEY }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}

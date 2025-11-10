@@ -1,0 +1,545 @@
+name: 'Security Gate Evaluation'
+
+on:
+  workflow_call:
+    inputs:
+      user-role-mapping:
+        description: 'JSON string mapping GitHub users to Permit.io roles (optional - uses Permit.io by default)'
+        required: false
+        type: string
+        default: '{}'
+      enable-dynamic-roles:
+        description: 'Enable fetching roles dynamically from Permit.io cloud'
+        required: false
+        type: boolean
+        default: true
+      override-gates:
+        description: 'Override Safe Deployment Gate (emergency deployment only)'
+        required: false
+        type: boolean
+        default: false
+      pdp-url:
+        description: 'PDP URL for authorization requests'
+        required: false
+        type: string
+        default: 'http://localhost:7766'
+      enable-quality-gates:
+        description: 'Enable SonarQube quality gate evaluation'
+        required: false
+        type: boolean
+        default: true
+      enable-codacy-gates:
+        description: 'Enable Codacy quality gate evaluation'
+        required: false
+        type: boolean
+        default: true
+      enable-test-gates:
+        description: 'Enable test results evaluation'
+        required: false
+        type: boolean
+        default: true
+        
+    secrets:
+      PERMIT_API_KEY:
+        required: true
+      SNYK_TOKEN:
+        required: false
+      SNYK_ORG_ID:
+        required: false
+        
+    outputs:
+      gate-result:
+        description: 'Combined gate result (0=pass, 1=warning, 2=blocked)'
+        value: ${{ jobs.evaluate-gates.outputs.gate-result }}
+      security-gate-result:
+        description: 'Security gate result'
+        value: ${{ jobs.evaluate-gates.outputs.security-gate-result }}
+      quality-gate-result:
+        description: 'Quality gate result'
+        value: ${{ jobs.evaluate-gates.outputs.quality-gate-result }}
+      codacy-gate-result:
+        description: 'Codacy gate result'
+        value: ${{ jobs.evaluate-gates.outputs.codacy-gate-result }}
+      test-gate-result:
+        description: 'Test gate result'
+        value: ${{ jobs.evaluate-gates.outputs.test-gate-result }}
+      user-role:
+        description: 'Determined user role'
+        value: ${{ jobs.evaluate-gates.outputs.user-role }}
+      access-level:
+        description: 'User access level'
+        value: ${{ jobs.evaluate-gates.outputs.access-level }}
+
+jobs:
+  evaluate-gates:
+    name: Evaluate Security Gates
+    runs-on: ubuntu-latest
+    
+    outputs:
+      gate-result: ${{ steps.combine-gates.outputs.gate-result }}
+      security-gate-result: ${{ steps.evaluate-security.outputs.gate-result }}
+      quality-gate-result: ${{ steps.evaluate-quality.outputs.combined-quality-result }}
+      codacy-gate-result: ${{ steps.evaluate-quality.outputs.codacy-result }}
+      test-gate-result: ${{ steps.evaluate-quality.outputs.test-result }}
+      user-role: ${{ steps.determine-role.outputs.user-role }}
+      access-level: ${{ steps.determine-role.outputs.access-level }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download security results
+        uses: actions/download-artifact@v4
+        with:
+          name: security-results
+          path: .
+          
+      - name: Download quality results
+        uses: actions/download-artifact@v4
+        with:
+          name: quality-results
+          path: .
+        continue-on-error: true
+        
+      - name: Download Codacy results
+        uses: actions/download-artifact@v4
+        with:
+          name: codacy-results
+          path: .
+        continue-on-error: true
+        
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: .
+        continue-on-error: true
+        
+      - name: Process Security Artifacts
+        id: process-artifacts
+        uses: ./.github/actions/process-security-artifacts
+        with:
+          process-snyk: 'true'
+          process-sonarqube: ${{ inputs.enable-quality-gates }}
+          process-codacy: ${{ inputs.enable-codacy-gates }}
+          process-tests: ${{ inputs.enable-test-gates }}
+          
+      - name: Determine User Role
+        id: determine-role
+        uses: ./.github/actions/determine-user-role
+        with:
+          github-user: ${{ github.actor }}
+          role-mapping: ${{ inputs.user-role-mapping }}
+          permit-api-key: ${{ secrets.PERMIT_API_KEY }}
+          enable-dynamic-roles: ${{ inputs.enable-dynamic-roles }}
+          
+      - name: Validate Role Assignment
+        id: validate-role
+        uses: ./.github/actions/validate-role-assignment
+        with:
+          permit-api-key: ${{ secrets.PERMIT_API_KEY }}
+          user-key: ${{ github.actor }}
+          intended-role: ${{ steps.determine-role.outputs.user-role }}
+          access-level: ${{ steps.determine-role.outputs.access-level }}
+          pdp-url: ${{ inputs.pdp-url }}
+          
+      - name: Validate Pipeline Configuration
+        env:
+          PERMIT_API_KEY: ${{ secrets.PERMIT_API_KEY }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+          USER_ROLE: ${{ steps.determine-role.outputs.user-role }}
+        run: |
+          echo "🔍 Validating Safe Deployment Gate pipeline configuration..."
+          
+          # Check required secrets
+          MISSING_SECRETS=""
+          if [ -z "$PERMIT_API_KEY" ]; then
+            MISSING_SECRETS="${MISSING_SECRETS} PERMIT_API_KEY"
+          fi
+          
+          if [ -n "$MISSING_SECRETS" ]; then
+            echo "❌ Missing required secrets:$MISSING_SECRETS"
+            echo "💡 Please configure these secrets in repository settings"
+            exit 1
+          fi
+          
+          echo "✅ Configuration validation passed"
+          echo "   GitHub User: ${{ github.actor }}"
+          echo "   Permit.io Role: $USER_ROLE"
+          echo "   Pipeline Type: Safe Deployment Gate (Inverted ABAC)"
+          
+          # Run Permit.io validation if script exists
+          if [ -f "permit-gating/scripts/validate-permit.sh" ]; then
+            chmod +x permit-gating/scripts/validate-permit.sh
+            ./permit-gating/scripts/validate-permit.sh
+          fi
+          
+      - name: Start PDP Service
+        uses: ./.github/actions/manage-pdp-service
+        with:
+          action: start
+          permit-api-key: ${{ secrets.PERMIT_API_KEY }}
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+          snyk-org-id: ${{ secrets.SNYK_ORG_ID }}
+          user-key: ${{ github.actor }}
+          user-role: ${{ steps.determine-role.outputs.user-role }}
+          use-smart-caching: 'true'
+          
+      - name: Debug Safe Deployment Gate Context
+        run: |
+          echo "🔍 Safe Deployment Gate Context:"
+          echo "  GitHub Actor: ${{ github.actor }}"
+          echo "  Assigned Role: ${{ steps.determine-role.outputs.user-role }}"
+          echo "  Access Level: ${{ steps.determine-role.outputs.access-level }}"
+          echo "  Authorization Logic: Inverted ABAC (allow safe deployments)"
+          echo "  Actual Role (Permit.io): ${{ steps.validate-role.outputs.actual-role }}"
+          echo "  Role Status: ${{ steps.validate-role.outputs.role-status }}"
+          echo "  Artifact Count: ${{ steps.process-artifacts.outputs.artifacts-count }}"
+          echo "  Snyk Results: ${{ steps.process-artifacts.outputs.snyk-results-path }}"
+          
+      - name: Evaluate Security Gate
+        id: evaluate-security
+        uses: ./.github/actions/evaluate-permit-gates
+        with:
+          snyk-results-path: ${{ steps.process-artifacts.outputs.snyk-results-path }}
+          pdp-url: ${{ inputs.pdp-url }}
+          permit-api-key: ${{ secrets.PERMIT_API_KEY }}
+          user-key: ${{ github.actor }}
+          user-role: ${{ steps.determine-role.outputs.user-role }}
+          access-level: ${{ steps.determine-role.outputs.access-level }}
+          debug-mode: 'true'
+        continue-on-error: true
+          
+      - name: Evaluate Quality Gates
+        id: evaluate-quality
+        uses: ./.github/actions/evaluate-quality-gates
+        with:
+          sonarqube-results-path: ${{ steps.process-artifacts.outputs.sonarqube-results-path }}
+          codacy-results-path: ${{ steps.process-artifacts.outputs.codacy-results-path }}
+          test-results-path: ${{ steps.process-artifacts.outputs.test-results-path }}
+          enable-sonarqube: ${{ inputs.enable-quality-gates }}
+          enable-codacy: ${{ inputs.enable-codacy-gates }}
+          enable-tests: ${{ inputs.enable-test-gates }}
+          
+      - name: Combine Gate Results
+        id: combine-gates
+        run: |
+          SECURITY_RESULT=${{ steps.evaluate-security.outputs.gate-result }}
+          QUALITY_RESULT=${{ steps.evaluate-quality.outputs.combined-quality-result }}
+          ACCESS_LEVEL="${{ steps.determine-role.outputs.access-level }}"
+          USER_ROLE="${{ steps.determine-role.outputs.user-role }}"
+          
+          echo "🔍 Gate Combination Analysis:"
+          echo "   Security Gate Result: $SECURITY_RESULT"
+          echo "   Quality Gate Result: $QUALITY_RESULT"
+          echo "   User Access Level: $ACCESS_LEVEL"
+          echo "   User Role: $USER_ROLE"
+          echo ""
+          
+          # Determine if user has override authority
+          HAS_FULL_OVERRIDE="false"
+          HAS_EMERGENCY_OVERRIDE="false"
+          
+          case "$ACCESS_LEVEL" in
+            "FULL_OVERRIDE")
+              HAS_FULL_OVERRIDE="true"
+              echo "🔓 Security Officer: Full override authority detected"
+              ;;
+            "EMERGENCY_OVERRIDE")
+              HAS_EMERGENCY_OVERRIDE="true"
+              echo "⚠️ Editor: Emergency override authority detected"
+              ;;
+            *)
+              echo "🔒 Standard User: No override authority"
+              ;;
+          esac
+          
+          # Combine gates with role-based override consideration
+          GATE_RESULT=0
+          OVERRIDE_APPLIED="false"
+          OVERRIDE_REASON=""
+          
+          # Calculate natural gate result (without overrides)
+          NATURAL_RESULT=0
+          if [ "$SECURITY_RESULT" = "2" ] || [ "$QUALITY_RESULT" = "2" ]; then
+            NATURAL_RESULT=2  # BLOCKED
+          elif [ "$SECURITY_RESULT" = "1" ] || [ "$QUALITY_RESULT" = "1" ]; then
+            NATURAL_RESULT=1  # WARNING
+          fi
+          
+          # Apply role-based override logic
+          if [ "$NATURAL_RESULT" = "2" ] && [ "$HAS_FULL_OVERRIDE" = "true" ]; then
+            GATE_RESULT=0  # Override to PASS
+            OVERRIDE_APPLIED="true"
+            OVERRIDE_REASON="Security Officer ($USER_ROLE) overrode blocking gates"
+            echo "🔓 Security Officer Override Applied"
+            echo "   Natural Result: BLOCKED → Overridden Result: PASSED"
+            echo "   Authority: $ACCESS_LEVEL allows override of all gate types"
+            
+          elif [ "$NATURAL_RESULT" = "2" ] && [ "$HAS_EMERGENCY_OVERRIDE" = "true" ]; then
+            # Editor can only override security gates, not quality gates
+            if [ "$SECURITY_RESULT" = "2" ] && [ "$QUALITY_RESULT" != "2" ]; then
+              GATE_RESULT=0  # Override security issues only
+              OVERRIDE_APPLIED="true" 
+              OVERRIDE_REASON="Editor ($USER_ROLE) overrode security gates"
+              echo "⚠️ Editor Emergency Override Applied (Security Only)"
+            else
+              GATE_RESULT=2  # Quality gates still block editors
+              echo "🚫 Editor Emergency Override NOT Applied"
+              echo "   Reason: Quality gates cannot be overridden by Editor role"
+            fi
+            
+          else
+            GATE_RESULT=$NATURAL_RESULT  # Use natural result
+            echo "✅ Using Natural Gate Result: $NATURAL_RESULT"
+          fi
+          
+          # Set final decision messaging
+          case "$GATE_RESULT" in
+            0)
+              if [ "$OVERRIDE_APPLIED" = "true" ]; then
+                echo "🔓 Combined gate decision: PASSED (WITH OVERRIDE)"
+                echo "   $OVERRIDE_REASON"
+              else
+                echo "✅ Combined gate decision: PASSED"
+                echo "   All gates passed successfully"
+              fi
+              ;;
+            1)
+              echo "⚠️ Combined gate decision: WARNING"
+              echo "   Deployment proceeding with non-blocking warnings"
+              ;;
+            2)
+              echo "🚫 Combined gate decision: BLOCKED"
+              echo "   Gate blocked deployment due to security or quality issues"
+              echo "   Override authority insufficient for current failures"
+              ;;
+          esac
+          
+          # Set outputs
+          echo "gate-result=$GATE_RESULT" >> $GITHUB_OUTPUT
+          echo "override-applied=$OVERRIDE_APPLIED" >> $GITHUB_OUTPUT
+          echo "override-reason=$OVERRIDE_REASON" >> $GITHUB_OUTPUT
+          echo "natural-result=$NATURAL_RESULT" >> $GITHUB_OUTPUT
+          
+      - name: Wait for Audit Logs
+        run: |
+          echo "Waiting for audit logs to be sent to Permit.io..."
+          sleep 10
+          
+          # Check PDP logs for audit activity
+          echo "Checking PDP logs for audit activity..."
+          docker compose -f permit-gating/docker/docker-compose.gating.yml logs permit-pdp --tail=20 | grep -i "audit\|log" || echo "No audit log entries found in recent logs"
+          
+      - name: Generate Gate Summary
+        run: |
+          # Generate comprehensive summary with role validation
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🎭 Role Assignment Validation
+          
+          | Component | Value |
+          |-----------|-------|
+          | **GitHub User** | \`${{ github.actor }}\` |
+          | **Intended Role** | \`${{ steps.determine-role.outputs.user-role }}\` (workflow logic) |
+          | **Actual Role** | \`${{ steps.validate-role.outputs.actual-role }}\` (Permit.io cloud) |
+          | **Status** | ${{ steps.validate-role.outputs.role-status }} |
+          | **Precedence** | Permit.io cloud configuration takes precedence |
+          | **Validation Method** | Temporary PDP authorization test |
+          | **Debug Info** | Available in evaluate-gates.sh execution |
+          
+          EOF
+          
+          # Add security enforcement impact if roles differ
+          INTENDED_ROLE="${{ steps.determine-role.outputs.user-role }}"
+          ACTUAL_ROLE="${{ steps.validate-role.outputs.actual-role }}"
+          if [ "$ACTUAL_ROLE" != "unknown" ] && [ "$ACTUAL_ROLE" != "$INTENDED_ROLE" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### 🔒 Security Enforcement Impact
+          - **Authorization Source**: Permit.io cloud configuration
+          - **Role Precedence**: Cloud role overrides workflow assignment  
+          - **Access Control**: Based on actual role (\`$ACTUAL_ROLE\`)
+          - **Audit Trail**: Will reflect actual role in authorization logs
+          
+          EOF
+          fi
+          
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🚪 Triple-Layer Security & Quality Gate Results for ${{ github.actor }}
+          
+          ### 🔐 Authorization Context
+          | Parameter | Value |
+          |-----------|-------|
+          | 👤 GitHub User | ${{ github.actor }} |
+          | 🎭 Permit.io Role | ${{ steps.determine-role.outputs.user-role }} |
+          | 🔐 Access Level | ${{ steps.determine-role.outputs.access-level }} |
+          | 🔄 Logic Type | Inverted ABAC (Resource Set) |
+          | 🎯 Policy Engine | Permit.io PDP (Cloud-managed) |
+          | 🔗 Audit Trail | [View in Permit.io](https://app.permit.io) |
+          | 🔍 Role Validation | Enhanced with intended vs actual comparison |
+          | 📊 Coverage Integration | JaCoCo → Codacy platform for trend tracking |
+          
+          ### 🔍 Gate Analysis Results
+          | Tool | Status | Result | Details |
+          |------|--------|--------|---------|
+          | 🛡️ Snyk Security | ${{ steps.evaluate-security.outputs.gate-status }} | Exit Code: ${{ steps.evaluate-security.outputs.gate-result }} | ${{ steps.evaluate-security.outputs.gate-details }} |
+          | 🔍 SonarQube Quality | ${{ steps.evaluate-quality.outputs.sonarqube-status || '⚠️ PENDING' }} | Exit Code: ${{ steps.evaluate-quality.outputs.sonarqube-result || 'N/A' }} | ${{ steps.evaluate-quality.outputs.sonarqube-reason || 'Analysis not available' }} |
+          | 📊 Codacy Code Quality | ${{ steps.evaluate-quality.outputs.codacy-status || '⚠️ PENDING' }} | Exit Code: ${{ steps.evaluate-quality.outputs.codacy-result || 'N/A' }} | ${{ steps.evaluate-quality.outputs.codacy-reason || 'Analysis not available' }} |
+          | 🧪 Unit Tests | ${{ steps.evaluate-quality.outputs.test-status || '⚠️ PENDING' }} | Exit Code: ${{ steps.evaluate-quality.outputs.test-result || 'N/A' }} | ${{ steps.evaluate-quality.outputs.test-reason || 'Tests not available' }} |
+          
+          ### 📊 Vulnerability Summary
+          | Severity | Count |
+          |----------|-------|
+          | Critical | ${{ steps.evaluate-security.outputs.critical-count }} |
+          | High | ${{ steps.evaluate-security.outputs.high-count }} |
+          | Medium | ${{ steps.evaluate-security.outputs.medium-count }} |
+          | Low | ${{ steps.evaluate-security.outputs.low-count }} |
+          
+          EOF
+          
+          # Add personalized access level explanation
+          ACCESS_LEVEL="${{ steps.determine-role.outputs.access-level }}"
+          case "$ACCESS_LEVEL" in
+            "FULL_OVERRIDE")
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### 🛡️ Security Officer Access
+          - ✅ **Safe Deployment Gate**: Full access when criticalCount = 0
+          - 🔓 **Base Deployment**: Override access for critical vulnerabilities
+          - 📋 **Audit Trail**: All overrides logged in [Permit.io Dashboard](https://app.permit.io)
+          - ⚠️ **Responsibility**: Document justification for emergency deployments
+          
+          EOF
+              ;;
+            "EMERGENCY_OVERRIDE")
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### ✏️ Editor Access
+          - ✅ **Safe Deployment Gate**: Access when criticalCount = 0
+          - ⚠️ **Emergency Override**: Can deploy with critical vulnerabilities
+          - 📝 **Post-Deployment**: Must address critical vulnerabilities immediately
+          - 📋 **Audit Required**: All overrides tracked and reviewed
+          
+          EOF
+              ;;
+            "SAFE_ONLY")
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### 👥 Developer Access
+          - ✅ **Safe Deployment Gate**: Access when criticalCount = 0
+          - ❌ **No Override**: Cannot deploy with critical vulnerabilities
+          - 💡 **Solutions**: Fix vulnerabilities or request editor/security assistance
+          - 🔒 **Security**: Strictest policy enforcement for safe deployments only
+          
+          EOF
+              ;;
+          esac
+          
+          # Add combined gate decision
+          GATE_RESULT=${{ steps.combine-gates.outputs.gate-result }}
+          CRITICAL_COUNT=${{ steps.evaluate-security.outputs.critical-count }}
+          case $GATE_RESULT in
+            0)
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### ✅ Combined Gate Decision: **PASSED**
+          📋 Result: Triple-layer analysis found acceptable risk - deployment proceeding.
+          EOF
+              if [ "$CRITICAL_COUNT" -gt 0 ] && [[ "$ACCESS_LEVEL" == *"OVERRIDE" ]]; then
+                cat >> $GITHUB_STEP_SUMMARY << EOF
+          🔓 **Override Active**: $CRITICAL_COUNT critical vulnerabilities bypassed by ${{ steps.determine-role.outputs.user-role }}.
+          ⚠️ **Action Required**: Address critical vulnerabilities immediately after deployment.
+          EOF
+              else
+                cat >> $GITHUB_STEP_SUMMARY << EOF
+          🎉 **Clean Deployment**: Safe Deployment Gate matched - no critical vulnerabilities detected.
+          ✅ **Security Status**: Deployment authorized by Safe Deployment Gate.
+          EOF
+              fi
+              ;;
+            1)
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### ⚠️ Combined Gate Decision: **WARNING**  
+          📋 Result: Triple-layer analysis found non-blocking issues - deployment proceeding.
+          💡 Recommendation: Review Snyk/SonarQube/Codacy warnings in next maintenance window.
+          EOF
+              ;;
+            2)
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### ❌ Combined Gate Decision: **BLOCKED**
+          🚫 Result: Critical vulnerabilities prevent deployment for ${{ steps.determine-role.outputs.user-role }} role.
+          💡 **Solutions:**
+             - Fix critical vulnerabilities to enable Safe Deployment Gate
+             - Use editor or Security Officer role for emergency override
+          EOF
+              ;;
+          esac
+          
+          # Handle override if enabled
+          if [ "${{ inputs.override-gates }}" = "true" ] && [ "${{ steps.combine-gates.outputs.gate-result }}" = "2" ]; then
+            echo "⚠️ **EMERGENCY OVERRIDE ACTIVATED** - Gates bypassed by authorized user" >> $GITHUB_STEP_SUMMARY
+            echo "📋 **Audit Required:** Document justification and create remediation plan" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+      - name: Stop PDP Service
+        if: always()
+        uses: ./.github/actions/manage-pdp-service
+        with:
+          action: stop
+          
+      - name: Enforce Gate Decision
+        run: |
+          GATE_RESULT=${{ steps.combine-gates.outputs.gate-result }}
+          MANUAL_OVERRIDE="${{ inputs.override-gates }}"
+          OVERRIDE_APPLIED="${{ steps.combine-gates.outputs.override-applied }}"
+          OVERRIDE_REASON="${{ steps.combine-gates.outputs.override-reason }}"
+          ACCESS_LEVEL="${{ steps.determine-role.outputs.access-level }}"
+          USER_ROLE="${{ steps.determine-role.outputs.user-role }}"
+          
+          echo "🏁 Final Deployment Decision Enforcement:"
+          echo "   Combined Gate Result: $GATE_RESULT"
+          echo "   Manual Override Flag: $MANUAL_OVERRIDE"
+          echo "   Role-based Override Applied: $OVERRIDE_APPLIED"
+          echo "   User Access Level: $ACCESS_LEVEL"
+          echo "   User Role: $USER_ROLE"
+          
+          if [ "$OVERRIDE_APPLIED" = "true" ]; then
+            echo "   Override Reason: $OVERRIDE_REASON"
+          fi
+          echo ""
+          
+          # Enhanced enforcement logic with role-based override support
+          case "$GATE_RESULT" in
+            0)
+              if [ "$OVERRIDE_APPLIED" = "true" ]; then
+                echo "🔓 Deployment authorized by role-based override"
+                echo "   $OVERRIDE_REASON"
+                echo "   ⚠️ AUDIT REQUIRED: Override usage logged for compliance review"
+              else
+                echo "✅ Deployment authorized - all gates passed naturally"
+              fi
+              exit 0
+              ;;
+            1)
+              echo "⚠️ Deployment proceeding with warnings"
+              echo "   Non-blocking issues detected but deployment continues"
+              exit 0
+              ;;
+            2)
+              if [ "$MANUAL_OVERRIDE" = "true" ]; then
+                echo "🔓 Deployment authorized by manual emergency override"
+                echo "   ⚠️ CRITICAL: Manual override bypassed automated gates"
+                echo "   🔍 AUDIT REQUIRED: Emergency override usage must be reviewed"
+                exit 0
+              else
+                echo "❌ Deployment blocked by security/quality gates"
+                echo "   Gate failures exceed user's override authority ($ACCESS_LEVEL)"
+                echo "   💡 Solutions:"
+                echo "      • Fix underlying issues to enable natural gate passage"
+                echo "      • Use emergency manual override (override-gates: true)"
+                echo "      • Request Security Officer approval for role-based override"
+                exit 2
+              fi
+              ;;
+            *)
+              echo "❓ Unexpected gate result: $GATE_RESULT"
+              echo "❌ Deployment blocked due to unknown gate state"
+              exit 2
+              ;;
+          esac
