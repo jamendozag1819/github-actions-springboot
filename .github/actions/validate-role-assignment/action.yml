@@ -1,0 +1,160 @@
+name: 'Validate Role Assignment'
+description: 'Validates intended role vs actual role in Permit.io cloud configuration'
+
+inputs:
+  permit-api-key:
+    description: 'Permit.io API key'
+    required: true
+  user-key:
+    description: 'User key (GitHub username)'
+    required: true
+  intended-role:
+    description: 'Intended role from workflow logic'
+    required: true
+  access-level:
+    description: 'Access level based on intended role'
+    required: true
+  pdp-url:
+    description: 'PDP URL for authorization requests'
+    required: false
+    default: 'http://localhost:7766'
+  compose-file:
+    description: 'Path to docker-compose file for PDP'
+    required: false
+    default: 'permit-gating/docker/docker-compose.gating.yml'
+
+outputs:
+  actual-role:
+    description: 'Actual role from Permit.io cloud'
+    value: ${{ steps.validate-role.outputs.actual-role }}
+  role-status:
+    description: 'Role validation status'
+    value: ${{ steps.validate-role.outputs.role-status }}
+  validation-summary:
+    description: 'Markdown summary of role validation'
+    value: ${{ steps.validate-role.outputs.validation-summary }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate Role Assignment Alignment
+      id: validate-role
+      shell: bash
+      env:
+        PERMIT_API_KEY: ${{ inputs.permit-api-key }}
+        USER_KEY: ${{ inputs.user-key }}
+        INTENDED_ROLE: ${{ inputs.intended-role }}
+        ACCESS_LEVEL: ${{ inputs.access-level }}
+        PDP_URL: ${{ inputs.pdp-url }}
+      run: |
+        echo "🎭 Validating Role Assignment Alignment..."
+        echo "   Intended Role (Workflow): $INTENDED_ROLE"
+        echo "   Access Level: $ACCESS_LEVEL"
+        echo ""
+        
+        # Start PDP temporarily for role validation
+        echo "🚀 Starting temporary PDP for role validation..."
+        docker compose -f ${{ inputs.compose-file }} up -d permit-pdp > /dev/null 2>&1
+        
+        # Wait for PDP readiness with timeout
+        echo "⏳ Waiting for PDP readiness..."
+        for i in {1..10}; do
+          if curl -sf http://localhost:7001/healthy > /dev/null 2>&1; then
+            echo "✅ PDP ready for validation"
+            break
+          elif [ $i -eq 10 ]; then
+            echo "⚠️ PDP timeout - skipping role validation"
+            docker compose -f ${{ inputs.compose-file }} down > /dev/null 2>&1
+            echo "actual-role=unknown" >> $GITHUB_OUTPUT
+            echo "role-status=⚠️ Unable to validate role" >> $GITHUB_OUTPUT
+            echo "validation-summary=Role validation skipped due to PDP timeout" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            sleep 3
+          fi
+        done
+        
+        # Test authorization to determine actual role
+        echo "🔍 Testing authorization to determine actual role..."
+        ACTUAL_ROLE="unknown"
+        ROLE_STATUS="unknown"
+        
+        # Make test authorization call
+        AUTH_RESPONSE=$(curl -s -X POST $PDP_URL/allowed \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $PERMIT_API_KEY" \
+          -d "{\"user\":{\"key\":\"$USER_KEY\",\"attributes\":{\"role\":\"$INTENDED_ROLE\"}},\"action\":\"deploy\",\"resource\":{\"type\":\"deployment\",\"key\":\"role-validation-test\",\"tenant\":\"default\",\"attributes\":{\"criticalCount\":0}}}" \
+          2>/dev/null || echo "{}")
+        
+        # Debug: Show response structure
+        echo "🔍 Debug: Authorization response structure:"
+        echo "$AUTH_RESPONSE" | jq '.' 2>/dev/null || echo "Invalid JSON response"
+        
+        # Try to extract actual role from various possible locations
+        if echo "$AUTH_RESPONSE" | jq -e '.debug.request.user.attributes.roles[0]' > /dev/null 2>&1; then
+          ACTUAL_ROLE=$(echo "$AUTH_RESPONSE" | jq -r '.debug.request.user.attributes.roles[0] // "unknown"')
+        elif echo "$AUTH_RESPONSE" | jq -e '.debug.rbac.allowing_roles[0]' > /dev/null 2>&1; then
+          ACTUAL_ROLE=$(echo "$AUTH_RESPONSE" | jq -r '.debug.rbac.allowing_roles[0] // "unknown"')
+        elif echo "$AUTH_RESPONSE" | jq -e '.debug.user_roles[0]' > /dev/null 2>&1; then
+          ACTUAL_ROLE=$(echo "$AUTH_RESPONSE" | jq -r '.debug.user_roles[0] // "unknown"')
+        fi
+        
+        # Determine role status and create validation summary
+        VALIDATION_SUMMARY=""
+        
+        if [ "$ACTUAL_ROLE" = "unknown" ]; then
+          ROLE_STATUS="⚠️ Unable to determine actual role from Permit.io"
+          echo "$ROLE_STATUS"
+          echo "   This may indicate the user is not configured in Permit.io cloud"
+          echo "   The workflow will proceed with intended role assignment"
+          VALIDATION_SUMMARY="⚠️ Role validation incomplete - proceeding with intended role: $INTENDED_ROLE"
+        elif [ "$ACTUAL_ROLE" = "$INTENDED_ROLE" ] || \
+             ([ "$ACTUAL_ROLE" = "security" ] && [ "$INTENDED_ROLE" = "Security Officer" ]); then
+          ROLE_STATUS="✅ Roles aligned"
+          echo "$ROLE_STATUS - Configuration consistent"
+          echo "   Actual Role (Permit.io): $ACTUAL_ROLE"
+          VALIDATION_SUMMARY="✅ Role configuration aligned: $ACTUAL_ROLE"
+        else
+          ROLE_STATUS="⚠️ Role override detected"
+          echo "$ROLE_STATUS"
+          echo "   Actual Role (Permit.io): $ACTUAL_ROLE"
+          echo "   Intended Role (Workflow): $INTENDED_ROLE"
+          echo "   Impact: Permit.io cloud configuration takes precedence"
+          
+          # Provide specific guidance based on actual role
+          case "$ACTUAL_ROLE" in
+            "developer")
+              echo "   Enforcement: Developer restrictions will be enforced"
+              echo "   Override: No override capability for critical vulnerabilities"
+              VALIDATION_SUMMARY="⚠️ Role override: $ACTUAL_ROLE (cloud) overrides $INTENDED_ROLE (workflow) - Developer restrictions enforced"
+              ;;
+            "editor")
+              echo "   Enforcement: Editor permissions will be enforced"
+              echo "   Override: Emergency override capability available"
+              VALIDATION_SUMMARY="⚠️ Role override: $ACTUAL_ROLE (cloud) overrides $INTENDED_ROLE (workflow) - Emergency override available"
+              ;;
+            "security"|"Security Officer")
+              echo "   Enforcement: Security Officer permissions will be enforced"
+              echo "   Override: Full override capability available"
+              VALIDATION_SUMMARY="⚠️ Role override: $ACTUAL_ROLE (cloud) overrides $INTENDED_ROLE (workflow) - Full override available"
+              ;;
+            *)
+              VALIDATION_SUMMARY="⚠️ Role override: $ACTUAL_ROLE (cloud) overrides $INTENDED_ROLE (workflow)"
+              ;;
+          esac
+        fi
+        
+        # Cleanup PDP
+        docker compose -f ${{ inputs.compose-file }} down > /dev/null 2>&1
+        
+        # Set outputs with validation
+        echo "actual-role=$ACTUAL_ROLE" >> $GITHUB_OUTPUT
+        echo "role-status=$ROLE_STATUS" >> $GITHUB_OUTPUT
+        
+        # Ensure validation summary is properly escaped for GitHub Actions output
+        # Replace any problematic characters that might break GitHub Actions parsing
+        SAFE_VALIDATION_SUMMARY=$(echo "$VALIDATION_SUMMARY" | tr '\n' ' ' | tr '\r' ' ')
+        echo "validation-summary=$SAFE_VALIDATION_SUMMARY" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "✅ Role validation completed"
