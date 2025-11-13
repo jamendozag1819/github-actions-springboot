@@ -8,8 +8,16 @@ on:
 
 
 jobs:
+  build:
+    name: Build & Test Job
+    uses: ./.github/workflows/build-application.yml
+    with:
+      java-version: '17'
+      maven-version: '3.8.6'
+
   security-scan:
     name: Snyk Analysis
+    needs: [build, unit-tests]
     uses: ./.github/workflows/security-scanning.yml
     permissions:
       contents: read
@@ -23,6 +31,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests & Coverage
+    needs: build
     uses: ./.github/workflows/unit-testing.yml
     with:
       java-version: '17'
@@ -31,7 +40,7 @@ jobs:
 
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [unit-tests]
+    needs: [build, unit-tests]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
@@ -39,4 +48,3 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-
