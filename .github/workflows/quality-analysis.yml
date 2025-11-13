@@ -7,6 +7,11 @@ on:
         required: false
         type: string
         default: '17'
+      thresholds:
+        description: 'Developer-effective threshold config'
+        required: false
+        type: string
+
     secrets:
       SONAR_TOKEN:
         required: true
