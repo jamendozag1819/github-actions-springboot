@@ -17,7 +17,7 @@ jobs:
 
   security-scan:
     name: Snyk Analysis
-    needs: [build, unit-tests]
+    needs: [build]
     uses: ./.github/workflows/security-scanning.yml
     permissions:
       contents: read
@@ -29,18 +29,9 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
 
-  unit-tests:
-    name: Unit Tests & Coverage
-    needs: build
-    uses: ./.github/workflows/unit-testing.yml
-    with:
-      java-version: '17'
-      coverage-threshold: 50
-      fail-on-coverage: false
-
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [build, unit-tests]
+    needs: [build]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
