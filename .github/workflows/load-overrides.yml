@@ -19,18 +19,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ===========================
+      # DEFAULT THRESHOLDS (FULL)
+      # ===========================
       - name: Define default thresholds
         id: defaults
         run: |
           cat <<EOF > default-thresholds.json
           {
-            "coverage_min": 50,
-            "high_vulns_max": 0,
             "critical_vulns_max": 0,
-            "test_pass_rate_min": 50
+            "high_vulns_max": 0,
+            "medium_vulns_max": 10,
+            "low_vulns_max": 999,
+
+            "test_pass_rate_min": 80,
+
+            "coverage_min": 80,
+            "code_smells_max": 100,
+            "bugs_max": 0,
+            "sonar_vulns_max": 0,
+            "duplication_max_percent": 5
           }
           EOF
 
+      # ===========================
+      # CHECK IF thresholds.json EXISTS
+      # ===========================
       - name: Load developer thresholds (if present)
         id: load_dev
         run: |
@@ -43,6 +57,9 @@ jobs:
             echo "file_exists=false" >> $GITHUB_OUTPUT
           fi
 
+      # ===========================
+      # MERGE: DEFAULTS + DEV OVERRIDES
+      # ===========================
       - name: Combine default + developer thresholds
         id: combine
         run: |
@@ -56,13 +73,16 @@ jobs:
 
           echo "$merged" > final-thresholds.json
 
-          # Output JSON correctly using multiline syntax
+          # Output JSON safely using multiline syntax
           {
             echo "thresholds<<EOF"
             echo "$merged"
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
+      # ===========================
+      # ARTIFACT: SAVED MERGED JSON
+      # ===========================
       - name: Upload normalized thresholds
         uses: actions/upload-artifact@v4
         with:
