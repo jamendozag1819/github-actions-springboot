@@ -1,4 +1,5 @@
 name: 'Code Quality Analysis'
+
 on:
   workflow_call:
     inputs:
@@ -30,6 +31,9 @@ on:
       sonar-gate-exit-code:
         description: 'Exit code from SonarQube quality gate analysis'
         value: ${{ jobs.code-quality.outputs.sonar-gate-exit-code }}
+      threshold-status:
+        description: 'Custom threshold evaluation result'
+        value: ${{ jobs.code-quality.outputs.threshold-status }}
 
 jobs:
   code-quality:
@@ -43,8 +47,13 @@ jobs:
       quality-gate-status: ${{ steps.sonarqube_scan.outputs.QUALITY_GATE_STATUS }}
       sonarqube-configured: ${{ steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED }}
       sonar-gate-exit-code: ${{ steps.sonarqube_scan.outputs.SONAR_GATE_EXIT_CODE }}
-    
+      threshold-status: ${{ steps.evaluate_thresholds.outputs.FINAL_THRESHOLD_STATUS }}
+
     steps:
+
+      # ========================
+      # CHECKOUT & BUILD SETUP
+      # ========================
       - name: Checkout code
         uses: actions/checkout@v4
         
@@ -62,7 +71,30 @@ jobs:
           name: test-results
           path: .
         continue-on-error: true
-          
+
+
+      # ========================
+      # LOAD THRESHOLDS.JSON
+      # ========================
+      - name: Load thresholds JSON
+        id: load_thresholds
+        run: |
+          echo "Loading dynamic thresholds…"
+
+          if [ -z "${{ inputs.thresholds }}" ]; then
+            echo "⚠️ No thresholds received — using empty JSON"
+            echo "{}" > thresholds.json
+          else
+            echo "${{ inputs.thresholds }}" > thresholds.json
+          fi
+
+          echo "Threshold file content:"
+          cat thresholds.json
+
+
+      # ========================
+      # VALIDATE SONAR CONFIG
+      # ========================
       - name: Validate SonarQube configuration
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -71,9 +103,14 @@ jobs:
         run: |
           chmod +x sonarqube-cloud-scanning/scripts/validate-sonarqube.sh
           
-          # Run validation and capture exit code
-          ./sonarqube-cloud-scanning/scripts/validate-sonarqube.sh && echo "SONARQUBE_VALIDATED=true" >> $GITHUB_ENV || echo "SONARQUBE_VALIDATED=false" >> $GITHUB_ENV
+          ./sonarqube-cloud-scanning/scripts/validate-sonarqube.sh \
+          && echo "SONARQUBE_VALIDATED=true" >> $GITHUB_ENV \
+          || echo "SONARQUBE_VALIDATED=false" >> $GITHUB_ENV
 
+
+      # ========================
+      # RUN SONARQUBE ANALYSIS
+      # ========================
       - name: Run SonarQube Cloud Analysis
         id: sonarqube_scan
         env:
@@ -83,34 +120,16 @@ jobs:
           SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
         run: |
           if [ -z "$SONAR_TOKEN" ] || [ "$SONARQUBE_VALIDATED" = "false" ]; then
-            echo "⚠️ SonarQube Cloud not configured or validation failed - skipping code quality analysis"
+            echo "⚠️ SonarQube Cloud not configured — skipping analysis"
             echo "SONARQUBE_CONFIGURED=false" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### ⚠️ Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
-            echo "SonarQube Cloud is not configured. Set SONAR_TOKEN secret to enable." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "🔍 Running SonarQube Cloud analysis..."
-            echo "SONARQUBE_CONFIGURED=true" >> $GITHUB_OUTPUT
-            
-            # Verify Java version for SonarQube
-            echo "🔍 Verifying Java setup for SonarQube analysis..."
-            echo "JAVA_HOME: $JAVA_HOME"
-            java -version
-            chmod +x mvnw
-            ./mvnw -version
-            
-            # Verify compiled classes exist
-            echo "🔍 Verifying compiled classes for SonarQube analysis..."
-            ls -la target/classes/ || echo "⚠️ No compiled classes found, will compile first"
-            
-            # Ensure classes are compiled for SonarQube analysis
-            if [ ! -d "target/classes" ]; then
-              echo "📦 Compiling classes for SonarQube analysis..."
-              ./mvnw compile
-            fi
+            exit 0
+          fi
 
-            # Run SonarQube analysis with quality gate wait
-            ./mvnw sonar:sonar \
+          echo "SONARQUBE_CONFIGURED=true" >> $GITHUB_OUTPUT
+
+          chmod +x mvnw
+
+          ./mvnw sonar:sonar \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=$SONAR_TOKEN \
             -Dsonar.organization=$SONAR_ORGANIZATION \
@@ -118,58 +137,67 @@ jobs:
             -Dsonar.projectName="CI/CD Pipeline Security POC" \
             -Dsonar.projectVersion=1.0.0 \
             -Dsonar.java.binaries=target/classes \
-            -Dsonar.qualitygate.wait=true \
-            -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
+            -Dsonar.qualitygate.wait=true || SONAR_EXIT_CODE=$?
 
-            
-            
-            # Capture quality gate status with better error handling
-            if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
-              echo "QUALITY_GATE_STATUS=PASSED" >> $GITHUB_OUTPUT
-              QG_STATUS="✅ PASSED"
-              echo "✅ SonarQube analysis completed successfully"
-            else
-              echo "QUALITY_GATE_STATUS=FAILED" >> $GITHUB_OUTPUT
-              QG_STATUS="❌ FAILED"
-              echo "❌ SonarQube analysis completed with quality gate failure (exit code: ${SONAR_EXIT_CODE})"
-              
-              # Don't fail the step here - let the gate evaluation handle it
-              echo "⚠️ Quality gate will be evaluated in the security-gates job"
-            fi
-            
-            # Run quality gate analysis and capture exit code
-            chmod +x sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh
-            
-            echo "🔍 Running detailed quality gate analysis..."
-            
-            # Disable exit on error temporarily to capture exit code
-            set +e
-            ./sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh \
-              -k "${{ env.SONAR_PROJECT_KEY_DEBUGIN }}:-cicd-pipeline-poc}" \
-              -o sonarqube-cloud-scanning/results/quality-gate-result.json
-            SONAR_GATE_EXIT_CODE=$?
-            set -e
-            
-            # Handle different exit codes from the analysis script
-            case "$SONAR_GATE_EXIT_CODE" in
-              0)
-                echo "✅ Quality gate analysis completed successfully"
-                ;;
-              1)
-                echo "⚠️ Quality gate analysis completed with warnings"
-                ;;
-              2)
-                echo "❌ Quality gate analysis failed - check quality standards"
-                ;;
-              *)
-                echo "❓ Quality gate analysis returned unexpected exit code: $SONAR_GATE_EXIT_CODE"
-                ;;
-            esac
-            
-            # Store the exit code for later evaluation
-            echo "SONAR_GATE_EXIT_CODE=$SONAR_GATE_EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
+            echo "QUALITY_GATE_STATUS=PASSED" >> $GITHUB_OUTPUT
+          else
+            echo "QUALITY_GATE_STATUS=FAILED" >> $GITHUB_OUTPUT
           fi
-          
+
+          echo "SONAR_GATE_EXIT_CODE=${SONAR_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+
+
+      # ========================
+      # MERGE SONAR RESULTS + THRESHOLDS
+      # ========================
+      - name: Evaluate custom Sonar thresholds
+        id: evaluate_thresholds
+        run: |
+          echo "📊 Evaluating thresholds for Sonar metrics…"
+
+          # Extract metrics
+          coverage=$(jq '.coverage' sonarqube-cloud-scanning/results/quality-gate-result.json)
+          code_smells=$(jq '.code_smells' sonarqube-cloud-scanning/results/quality-gate-result.json)
+          bugs=$(jq '.bugs' sonarqube-cloud-scanning/results/quality-gate-result.json)
+          duplication=$(jq '.duplication' sonarqube-cloud-scanning/results/quality-gate-result.json)
+          vulnerabilities=$(jq '.vulnerabilities' sonarqube-cloud-scanning/results/quality-gate-result.json)
+
+          # Extract thresholds
+          coverage_min=$(jq '.coverage_min // 0' thresholds.json)
+          code_smells_max=$(jq '.code_smells_max // 9999' thresholds.json)
+          bugs_max=$(jq '.bugs_max // 0' thresholds.json)
+          duplication_max=$(jq '.duplication_max_percent // 100' thresholds.json)
+          sonar_vulns_max=$(jq '.sonar_vulns_max // 0' thresholds.json)
+
+          status="PASSED"
+
+          if (( $(echo "$coverage < $coverage_min" | bc -l) )); then
+            status="FAILED"
+          fi
+
+          if [ "$code_smells" -gt "$code_smells_max" ]; then
+            status="FAILED"
+          fi
+
+          if [ "$bugs" -gt "$bugs_max" ]; then
+            status="FAILED"
+          fi
+
+          if (( $(echo "$duplication > $duplication_max" | bc -l) )); then
+            status="FAILED"
+          fi
+
+          if [ "$vulnerabilities" -gt "$sonar_vulns_max" ]; then
+            status="FAILED"
+          fi
+
+          echo "FINAL_THRESHOLD_STATUS=$status" >> $GITHUB_OUTPUT
+
+
+      # ========================
+      # UPLOAD RESULTS FOR UI
+      # ========================
       - name: Generate quality summary
         if: steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED == 'true'
         uses: ./.github/actions/generate-quality-summary
@@ -177,12 +205,11 @@ jobs:
           results-file: sonarqube-cloud-scanning/results/quality-gate-result.json
           project-key: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
           branch-name: ${{ github.ref_name }}
-          
+
       - name: Upload quality results
         uses: actions/upload-artifact@v4
         with:
           name: quality-results
-          path: |
-            sonarqube-cloud-scanning/results/quality-gate-result.json
+          path: sonarqube-cloud-scanning/results/quality-gate-result.json
           if-no-files-found: warn
           retention-days: 1
