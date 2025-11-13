@@ -10,7 +10,6 @@ on:
 jobs:
   security-scan:
     name: Snyk Analysis
-    needs: [unit-tests]
     uses: ./.github/workflows/security-scanning.yml
     permissions:
       contents: read
