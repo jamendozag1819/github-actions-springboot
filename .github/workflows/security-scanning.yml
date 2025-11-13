@@ -172,3 +172,34 @@ jobs:
             snyk-scanning/results/snyk-container-results.json
           if-no-files-found: warn
           retention-days: 1
+
+      - name: Evaluate thresholds (PASS/WARN/FAIL)
+        id: eval-thresholds
+        run: |
+          echo "🔍 Applying thresholds..."
+
+          # Guardar thresholds JSON en archivo temporal
+          echo '${{ inputs.thresholds }}' > thresholds-effective.json
+          cat thresholds-effective.json
+
+          # Cargar valores de thresholds
+          CRITICAL_MAX=$(jq '.critical_vulns_max' thresholds-effective.json)
+          HIGH_MAX=$(jq '.high_vulns_max' thresholds-effective.json)
+
+          # Cargar valores encontrados por Snyk
+          CRITICAL_FOUND=${{ steps.security-summary.outputs.critical-count }}
+          HIGH_FOUND=${{ steps.security-summary.outputs.high-count }}
+
+          echo "Critical found: $CRITICAL_FOUND  (max: $CRITICAL_MAX)"
+          echo "High found:     $HIGH_FOUND      (max: $HIGH_MAX)"
+
+          STATUS="PASS"
+
+          if [ "$CRITICAL_FOUND" -gt "$CRITICAL_MAX" ]; then
+            STATUS="FAIL"
+          elif [ "$HIGH_FOUND" -gt "$HIGH_MAX" ]; then
+            STATUS="WARN"
+          fi
+
+          echo "Final severity status: $STATUS"
+          echo "severity-status=$STATUS" >> $GITHUB_OUTPUT
