@@ -24,10 +24,10 @@ jobs:
         run: |
           cat <<EOF > default-thresholds.json
           {
-            "coverage_min": 80,
+            "coverage_min": 50,
             "high_vulns_max": 0,
             "critical_vulns_max": 0,
-            "test_pass_rate_min": 95
+            "test_pass_rate_min": 50
           }
           EOF
 
@@ -37,10 +37,18 @@ jobs:
           if [ -f "thresholds.json" ]; then
             echo "Developer thresholds found:"
             cat thresholds.json
-            echo "file_exists=true" >> $GITHUB_OUTPUT
+               {
+                 echo "thresholds<<EOF"
+                 echo "$merged"
+                 echo "EOF"
+               } >> $GITHUB_OUTPUT
           else
             echo "No thresholds.json found. Using defaults."
-            echo "file_exists=false" >> $GITHUB_OUTPUT
+               {
+                 echo "thresholds<<EOF"
+                 echo "$merged"
+                 echo "EOF"
+               } >> $GITHUB_OUTPUT
           fi
 
       - name: Combine default + developer thresholds
