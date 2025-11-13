@@ -37,18 +37,10 @@ jobs:
           if [ -f "thresholds.json" ]; then
             echo "Developer thresholds found:"
             cat thresholds.json
-               {
-                 echo "thresholds<<EOF"
-                 echo "$merged"
-                 echo "EOF"
-               } >> $GITHUB_OUTPUT
+            echo "file_exists=true" >> $GITHUB_OUTPUT
           else
             echo "No thresholds.json found. Using defaults."
-               {
-                 echo "thresholds<<EOF"
-                 echo "$merged"
-                 echo "EOF"
-               } >> $GITHUB_OUTPUT
+            echo "file_exists=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Combine default + developer thresholds
@@ -63,7 +55,13 @@ jobs:
           fi
 
           echo "$merged" > final-thresholds.json
-          echo "thresholds=$merged" >> $GITHUB_OUTPUT
+
+          # Output JSON correctly using multiline syntax
+          {
+            echo "thresholds<<EOF"
+            echo "$merged"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Upload normalized thresholds
         uses: actions/upload-artifact@v4
