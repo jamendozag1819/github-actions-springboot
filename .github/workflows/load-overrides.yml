@@ -1,0 +1,64 @@
+name: Load Developer Overrides
+
+on:
+  workflow_call:
+    outputs:
+      thresholds:
+        description: "Effective thresholds loaded from project or defaults"
+        value: ${{ jobs.load.outputs.thresholds }}
+
+jobs:
+  load:
+    name: Load Developer Overrides
+    runs-on: ubuntu-latest
+
+    outputs:
+      thresholds: ${{ steps.combine.outputs.thresholds }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Define default thresholds
+        id: defaults
+        run: |
+          cat <<EOF > default-thresholds.json
+          {
+            "coverage_min": 80,
+            "high_vulns_max": 0,
+            "critical_vulns_max": 0,
+            "test_pass_rate_min": 95
+          }
+          EOF
+
+      - name: Load developer thresholds (if present)
+        id: load_dev
+        run: |
+          if [ -f "thresholds.json" ]; then
+            echo "Developer thresholds found:"
+            cat thresholds.json
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No thresholds.json found. Using defaults."
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Combine default + developer thresholds
+        id: combine
+        run: |
+          if [ "${{ steps.load_dev.outputs.file_exists }}" = "true" ]; then
+            echo "Merging developer overrides with defaults..."
+            merged=$(jq -s '.[0] * .[1]' default-thresholds.json thresholds.json)
+          else
+            echo "Using defaults only..."
+            merged=$(cat default-thresholds.json)
+          fi
+
+          echo "$merged" > final-thresholds.json
+          echo "thresholds=$merged" >> $GITHUB_OUTPUT
+
+      - name: Upload normalized thresholds
+        uses: actions/upload-artifact@v4
+        with:
+          name: effective-thresholds
+          path: final-thresholds.json

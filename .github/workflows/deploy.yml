@@ -8,8 +8,13 @@ on:
 
 
 jobs:
+  load-overrides:
+    name: Load Developer Overrides
+    uses: ./.github/workflows/load-overrides.yml
+
   build:
     name: Build & Test Job
+    needs: [load-overrides]
     uses: ./.github/workflows/build-application.yml
     with:
       java-version: '17'
@@ -17,24 +22,23 @@ jobs:
 
   security-scan:
     name: Snyk Analysis
-    needs: [build]
+    needs: [build, load-overrides]
     uses: ./.github/workflows/security-scanning.yml
-    permissions:
-      contents: read
-      security-events: write
     with:
       java-version: '17'
-      run-container-scan: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+      run-container-scan: false
+      thresholds: ${{ needs.load-overrides.outputs.thresholds }}
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
 
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [build]
+    needs: [build, security-scan, load-overrides]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
+      thresholds: ${{ needs.load-overrides.outputs.thresholds }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
