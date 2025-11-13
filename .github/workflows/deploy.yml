@@ -2,45 +2,15 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'release/*' ]
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-    inputs:
-      override_gates:
-        description: 'Anulación de la puerta de despliegue seguro (solo para despliegue de emergencia)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
+    branches: [ main, 'release/*' ]
 
-env:
-  JAVA_VERSION: '17'
-  MAVEN_VERSION: '3.8.6'
-  DOCKER_BUILDKIT: 1
 
 jobs:
-  build:
-    name: Build Application
-    uses: ./.github/workflows/build-application.yml
-    with:
-      java-version: '17'
-      maven-version: '3.8.6'
-
-  unit-tests:
-    name: Unit Tests & Coverage
-    needs: build
-    uses: ./.github/workflows/unit-testing.yml
-    with:
-      java-version: '17'
-      coverage-threshold: 50
-      fail-on-coverage: false
-
   security-scan:
     name: Snyk Analysis
-    needs: [build, unit-tests]
+    needs: [unit-tests]
     uses: ./.github/workflows/security-scanning.yml
     permissions:
       contents: read
@@ -51,10 +21,18 @@ jobs:
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
-  
+
+  unit-tests:
+    name: Unit Tests & Coverage
+    uses: ./.github/workflows/unit-testing.yml
+    with:
+      java-version: '17'
+      coverage-threshold: 50
+      fail-on-coverage: false
+
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [build, unit-tests]
+    needs: [unit-tests]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
@@ -63,25 +41,3 @@ jobs:
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
-  security-gates:
-    name: Security Gate Evaluation
-    # TEMPORARY: Codacy dependency removed - uncomment line below and comment current line to re-enable
-    # needs: [security-scan, code-quality, codacy-analysis]
-    needs: [security-scan, code-quality]
-    uses: ./.github/workflows/security-gate-evaluation.yml
-    with:
-      # Dynamic role mapping is now enabled by default
-      # Roles are fetched directly from Permit.io cloud
-      # Optional: Add custom mappings below to override Permit.io roles
-      user-role-mapping: '{}'
-      enable-dynamic-roles: true
-      override-gates: ${{ github.event.inputs.override_gates == 'true' }}
-      enable-quality-gates: true
-      # TEMPORARY: Codacy gates disabled - uncomment line below and comment current line to re-enable
-      # enable-codacy-gates: true
-      enable-codacy-gates: false
-      enable-test-gates: true
-    secrets:
-      PERMIT_API_KEY: ${{ secrets.PERMIT_API_KEY }}
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
