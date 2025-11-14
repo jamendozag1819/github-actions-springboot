@@ -47,7 +47,6 @@ jobs:
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: '17'
-      run-container-scan: false
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
