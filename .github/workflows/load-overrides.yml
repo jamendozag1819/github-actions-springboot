@@ -67,7 +67,7 @@ jobs:
           sed -E 's/^([[:space:]]*)([A-Za-z0-9_]+):/\1"\2":/g' thresholds.json > fixed.json
           mv fixed.json thresholds.json
 
-          echo "Resultado final (developer JSON corregido):"
+          echo "Developer JSON corregido:"
           cat thresholds.json
 
       # ===========================
@@ -84,11 +84,17 @@ jobs:
             merged=$(cat default-thresholds.json)
           fi
 
-          echo "$merged" > final-thresholds.json
+          echo "$merged" > merged-raw.json
+
+          # 🔥 FIX FINAL: normalize merged JSON (quote keys)
+          sed -E 's/([A-Za-z0-9_]+):/"\1":/g' merged-raw.json > final-thresholds.json
+
+          echo "Final merged JSON (validado):"
+          cat final-thresholds.json
 
           {
             echo "thresholds<<EOF"
-            echo "$merged"
+            cat final-thresholds.json
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
