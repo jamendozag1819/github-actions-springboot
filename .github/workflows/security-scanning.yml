@@ -10,11 +10,6 @@ on:
         required: false
         type: string
         default: '17'
-      run-container-scan:
-        description: 'Whether to run container scanning'
-        required: false
-        type: boolean
-        default: false
       thresholds:
         description: 'Developer-effective threshold config'
         required: false
@@ -126,35 +121,6 @@ jobs:
         with:
           name: build-artifacts
           path: target/
-    
-      - name: Build and scan Docker image
-        if: inputs.run-container-scan
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: |
-          # Build Docker image
-          docker build -t api-sprinboot:${{ github.sha }} .
-          docker tag api-sprinboot:${{ github.sha }} cicd-poc-app:scan
-          
-          # Scan Docker image with Snyk
-          echo "🐳 Scanning Docker image for vulnerabilities..."
-          snyk container test cicd-poc-app:scan --json > snyk-scanning/results/snyk-container-results.json || true
-          
-          # Send container results to Snyk UI
-          snyk container monitor cicd-poc-app:scan --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-container" || true
-          
-      - name: Save Docker image for reuse
-        if: inputs.run-container-scan
-        run: |
-          docker save api-sprinboot:${{ github.sha }} > api-sprinboot-temp.tar
-          
-      - name: Upload Docker image artifact
-        if: inputs.run-container-scan
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image-temp
-          path: api-sprinboot-temp.tar
-          retention-days: 1
           
       - name: Generate security summary
         id: security-summary

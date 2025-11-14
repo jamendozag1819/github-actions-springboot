@@ -29,7 +29,6 @@ jobs:
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: '17'
-      run-container-scan: false
       thresholds: ${{ needs.load-overrides.outputs.thresholds }}
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
