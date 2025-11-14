@@ -53,6 +53,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-jacoco
-          path: target/site/jacoco/jacoco.xml
+          path: target/site/jacoco/
           retention-days: 1
  
