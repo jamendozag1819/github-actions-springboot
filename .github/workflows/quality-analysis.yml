@@ -83,7 +83,9 @@ jobs:
          echo "⚠️ No thresholds received — using empty JSON"
          echo "{}" > thresholds.json
          else
-         printf '%b' "${{ inputs.thresholds }}" > thresholds.json
+         echo '${{ inputs.thresholds }}' > thresholds.json
+         cat thresholds.json
+         
          fi
 
          echo "Threshold file content:"
