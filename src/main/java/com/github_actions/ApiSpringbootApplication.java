@@ -10,14 +10,5 @@ public class ApiSpringbootApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(ApiSpringbootApplication.class, args);
-		String password="12345678";
-		System.out.println(password);
-		try {
-			Runtime.getRuntime().exec("ls");
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
 	}
 }
