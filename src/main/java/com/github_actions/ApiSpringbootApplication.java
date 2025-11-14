@@ -1,5 +1,7 @@
 package com.github_actions;
 
+import java.io.IOException;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -8,5 +10,14 @@ public class ApiSpringbootApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(ApiSpringbootApplication.class, args);
+		String password="12345678";
+		System.out.println(password);
+		try {
+			Runtime.getRuntime().exec("ls");
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
 	}
 }
