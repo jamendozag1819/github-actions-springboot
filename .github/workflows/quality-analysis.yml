@@ -72,6 +72,11 @@ jobs:
           path: .
         continue-on-error: true
 
+      - name: Download classes
+        uses: actions/download-artifact@v4
+        with:
+         name: build-classes
+         path: target/classes
 
       # ========================
       # LOAD THRESHOLDS.JSON
