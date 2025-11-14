@@ -148,6 +148,27 @@ jobs:
 
           echo "SONAR_GATE_EXIT_CODE=${SONAR_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
 
+            # ⭐ NEW: Download and replace SonarCloud results JSON
+      - name: Download latest SonarCloud results JSON
+        if: steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
+        run: |
+          echo "📥 Fetching latest SonarCloud metrics…"
+
+          # Ensure directory exists
+          mkdir -p sonarqube-cloud-scanning/results
+
+          # Download SonarCloud results and REPLACE the existing file
+          curl -s -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/measures/component?component=$SONAR_PROJECT_KEY&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,security_hotspots" \
+            -o sonarqube-cloud-scanning/results/quality-gate-result.json
+
+          echo "📄 Downloaded updated quality-gate-result.json:"
+          cat sonarqube-cloud-scanning/results/quality-gate-result.json
+
+
 
       # ========================
       # MERGE SONAR RESULTS + THRESHOLDS
