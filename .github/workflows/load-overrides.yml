@@ -80,6 +80,16 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
+      - name: Fix invalid thresholds JSON (auto-quote keys)
+        run: |
+          echo "🛠 Normalizando thresholds.json..."
+          # Agrega comillas a claves no citadas
+          sed -E 's/^([[:space:]]*)([A-Za-z0-9_]+):/\1"\2":/g' thresholds.json > fixed.json
+          mv fixed.json thresholds.json
+
+          echo "Resultado final:"
+          cat thresholds.json
+
       # ===========================
       # ARTIFACT: SAVED MERGED JSON
       # ===========================
