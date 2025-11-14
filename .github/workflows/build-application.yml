@@ -28,9 +28,8 @@ jobs:
           java-version: ${{ inputs.java-version }}
           
       - name: Build Spring Boot application
-        run: |
-         chmod +x mvnw
-         ./mvnw clean verify
+        run: |         
+         mvn clean verify
           
       - name: Package application
         run: |
