@@ -155,15 +155,13 @@ jobs:
           echo "📊 Evaluating thresholds for Sonar metrics…"
           RESULT_FILE="sonarqube-cloud-scanning/results/quality-gate-result.json"
 
-          # Safe extractor for Sonar metrics (handles null, missing, strings)
           safe_number() {
-          value=$(jq -r "$1 // 0" "$2" 2>/dev/null)
-          value=$(echo "$value" | sed 's/[^0-9.\-]//g')
-          if [ -z "$value" ]; then value=0; fi
-          echo "$value"
+            value=$(jq -r "$1 // 0" "$2" 2>/dev/null)
+            value=$(echo "$value" | sed 's/[^0-9.\-]//g')
+            if [ -z "$value" ]; then value=0; fi
+            echo "$value"
           }
 
-          # Extract Sonar metrics
           coverage=$(safe_number '.metrics.coverage' "$RESULT_FILE")
           code_smells=$(safe_number '.metrics.code_smells' "$RESULT_FILE")
           bugs=$(safe_number '.metrics.bugs' "$RESULT_FILE")
@@ -176,7 +174,6 @@ jobs:
           echo "Duplication: $duplication"
           echo "Vulnerabilities: $vulnerabilities"
 
-          # Thresholds JSON from load-overrides.yml
           TH_FILE="thresholds.json"
 
           coverage_min=$(safe_number '.coverage_min' "$TH_FILE")
@@ -187,7 +184,6 @@ jobs:
 
           status="PASSED"
 
-          # Apply threshold rules
           if (( $(echo "$coverage < $coverage_min" | bc -l) )); then status="FAILED"; fi
           if (( $(echo "$code_smells > $code_smells_max" | bc -l) )); then status="FAILED"; fi
           if (( $(echo "$bugs > $bugs_max" | bc -l) )); then status="FAILED"; fi
@@ -195,6 +191,34 @@ jobs:
           if (( $(echo "$vulnerabilities > $sonar_vulns_max" | bc -l) )); then status="FAILED"; fi
 
           echo "FINAL_THRESHOLD_STATUS=$status" >> $GITHUB_OUTPUT
+
+
+      # ========================
+      # ALWAYS GENERATE SUMMARY (NEW BLOCK)
+      # ========================
+      - name: Render Threshold Summary
+        if: always()
+        run: |
+          echo "### 📊 Custom Threshold Evaluation" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage Min Required: $(jq -r '.coverage_min // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Smells Max Allowed: $(jq -r '.code_smells_max // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- Bugs Max Allowed: $(jq -r '.bugs_max // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- Vulnerabilities Max Allowed: $(jq -r '.sonar_vulns_max // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- Duplication Max Allowed: $(jq -r '.duplication_max_percent // 0' thresholds.json)%" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 Actual Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage: $coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Smells: $code_smells" >> $GITHUB_STEP_SUMMARY
+          echo "- Bugs: $bugs" >> $GITHUB_STEP_SUMMARY
+          echo "- Duplication: $duplication" >> $GITHUB_STEP_SUMMARY
+          echo "- Vulnerabilities: $vulnerabilities" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$status" = "PASSED" ]; then
+            echo "### ✅ Threshold Result: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Threshold Result: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
 
 
       # ========================
