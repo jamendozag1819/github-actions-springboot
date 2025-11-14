@@ -29,7 +29,7 @@ jobs:
           
       - name: Build Spring Boot application
         run: |
-          mvn clean compile test
+         ./mvnw clean verify
           
       - name: Package application
         run: |
@@ -48,3 +48,11 @@ jobs:
           name: build-classes
           path: target/classes/**
           retention-days: 1
+
+      - name: Upload Jacoco File
+        uses: actions/upload-artifact@v4
+        with:
+          name: buld-racoco
+          path: target/site/jacoco/jacoco.xml
+          retention-days: 1
+ 
