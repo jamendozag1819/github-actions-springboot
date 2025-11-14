@@ -74,7 +74,7 @@ jobs:
       - name: Download Jacoco report
         uses: actions/download-artifact@v4
         with:
-          name: buld-jacoco
+          name: build-jacoco
           path: target/site/jacoco
 
       # ========================
