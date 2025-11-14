@@ -58,7 +58,20 @@ jobs:
           fi
 
       # ===========================
-      # MERGE: DEFAULTS + DEV OVERRIDES
+      # FIX JSON ONLY IF thresholds.json EXISTS
+      # ===========================
+      - name: Fix invalid thresholds JSON (auto-quote keys)
+        if: steps.load_dev.outputs.file_exists == 'true'
+        run: |
+          echo "🛠 Normalizando thresholds.json..."
+          sed -E 's/^([[:space:]]*)([A-Za-z0-9_]+):/\1"\2":/g' thresholds.json > fixed.json
+          mv fixed.json thresholds.json
+
+          echo "Resultado final (developer JSON corregido):"
+          cat thresholds.json
+
+      # ===========================
+      # MERGE: DEFAULTS + FIXED DEV OVERRIDES
       # ===========================
       - name: Combine default + developer thresholds
         id: combine
@@ -73,25 +86,14 @@ jobs:
 
           echo "$merged" > final-thresholds.json
 
-          # Output JSON safely using multiline syntax
           {
             echo "thresholds<<EOF"
             echo "$merged"
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      - name: Fix invalid thresholds JSON (auto-quote keys)
-        run: |
-          echo "🛠 Normalizando thresholds.json..."
-          # Agrega comillas a claves no citadas
-          sed -E 's/^([[:space:]]*)([A-Za-z0-9_]+):/\1"\2":/g' thresholds.json > fixed.json
-          mv fixed.json thresholds.json
-
-          echo "Resultado final:"
-          cat thresholds.json
-
       # ===========================
-      # ARTIFACT: SAVED MERGED JSON
+      # ARTIFACT OUTPUT
       # ===========================
       - name: Upload normalized thresholds
         uses: actions/upload-artifact@v4
