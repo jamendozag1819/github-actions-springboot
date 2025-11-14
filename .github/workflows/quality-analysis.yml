@@ -194,31 +194,69 @@ jobs:
 
 
       # ========================
-      # ALWAYS GENERATE SUMMARY (NEW BLOCK)
+      # ALWAYS GENERATE SUMMARY (FULLY UPDATED)
       # ========================
       - name: Render Threshold Summary
         if: always()
         run: |
-          echo "### 📊 Custom Threshold Evaluation" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage Min Required: $(jq -r '.coverage_min // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
-          echo "- Code Smells Max Allowed: $(jq -r '.code_smells_max // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
-          echo "- Bugs Max Allowed: $(jq -r '.bugs_max // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
-          echo "- Vulnerabilities Max Allowed: $(jq -r '.sonar_vulns_max // 0' thresholds.json)" >> $GITHUB_STEP_SUMMARY
-          echo "- Duplication Max Allowed: $(jq -r '.duplication_max_percent // 0' thresholds.json)%" >> $GITHUB_STEP_SUMMARY
+          RESULT_FILE="sonarqube-cloud-scanning/results/quality-gate-result.json"
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📈 Actual Metrics" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage: $coverage" >> $GITHUB_STEP_SUMMARY
-          echo "- Code Smells: $code_smells" >> $GITHUB_STEP_SUMMARY
-          echo "- Bugs: $bugs" >> $GITHUB_STEP_SUMMARY
-          echo "- Duplication: $duplication" >> $GITHUB_STEP_SUMMARY
-          echo "- Vulnerabilities: $vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Sonar + Threshold Summary" >> $GITHUB_STEP_SUMMARY
 
-          if [ "$status" = "PASSED" ]; then
-            echo "### ✅ Threshold Result: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ❌ Threshold Result: FAILED" >> $GITHUB_STEP_SUMMARY
+          if [ ! -f "$RESULT_FILE" ]; then
+            echo "❌ No Sonar results JSON was found." >> $GITHUB_STEP_SUMMARY
+            exit 0
           fi
+
+          # Extract real metrics
+          coverage=$(jq -r '.metrics.coverage // 0' "$RESULT_FILE")
+          code_smells=$(jq -r '.metrics.code_smells // 0' "$RESULT_FILE")
+          bugs=$(jq -r '.metrics.bugs // 0' "$RESULT_FILE")
+          duplication=$(jq -r '.metrics.duplicated_lines_density // 0' "$RESULT_FILE")
+          vulnerabilities=$(jq -r '.metrics.vulnerabilities // 0' "$RESULT_FILE")
+          qg_status=$(jq -r '.quality_gate.status // "UNKNOWN"' "$RESULT_FILE")
+          sonar_decision=$(jq -r '.quality_gate.decision // "UNKNOWN"' "$RESULT_FILE")
+
+          # Extract thresholds
+          cov_min=$(jq -r '.coverage_min // 0' thresholds.json)
+          smells_max=$(jq -r '.code_smells_max // 0' thresholds.json)
+          bugs_max=$(jq -r '.bugs_max // 0' thresholds.json)
+          vuln_max=$(jq -r '.sonar_vulns_max // 0' thresholds.json)
+          dup_max=$(jq -r '.duplication_max_percent // 0' thresholds.json)
+
+          echo "### 📈 Actual Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage: **$coverage%**" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Smells: **$code_smells**" >> $GITHUB_STEP_SUMMARY
+          echo "- Bugs: **$bugs**" >> $GITHUB_STEP_SUMMARY
+          echo "- Duplication: **$duplication%**" >> $GITHUB_STEP_SUMMARY
+          echo "- Vulnerabilities: **$vulnerabilities**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📏 Required Thresholds" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage ≥ **$cov_min%**" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Smells ≤ **$smells_max**" >> $GITHUB_STEP_SUMMARY
+          echo "- Bugs ≤ **$bugs_max**" >> $GITHUB_STEP_SUMMARY
+          echo "- Vulnerabilities ≤ **$vuln_max**" >> $GITHUB_STEP_SUMMARY
+          echo "- Duplication ≤ **$dup_max%**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🧪 Quality Gate Result" >> $GITHUB_STEP_SUMMARY
+          if [ "$qg_status" = "OK" ]; then
+            echo "✅ Quality Gate: **PASSED**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Quality Gate: **FAILED**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🧩 Threshold Result" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.evaluate_thresholds.outputs.FINAL_THRESHOLD_STATUS }}" = "PASSED" ]; then
+            echo "✅ Custom Thresholds: **PASSED**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Custom Thresholds: **FAILED**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "🔗 **[Open SonarCloud Dashboard](https://sonarcloud.io/project/overview?id=${{ env.SONAR_PROJECT_KEY_DEBUGIN }})**" >> $GITHUB_STEP_SUMMARY
 
 
       # ========================
