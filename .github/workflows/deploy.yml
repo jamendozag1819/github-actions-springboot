@@ -66,3 +66,8 @@ jobs:
     needs: [code-quality,security-scan]
     name: Load Developer Overrides
     uses: ./.github/workflows/load-overrides.yml
+
+  evaluate-gates:
+    needs: [ load-overrides ]
+    name: Evaluate Gates
+    uses: ./.github/workflows/evaluate-gates.yml

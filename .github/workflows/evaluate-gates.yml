@@ -1,0 +1,129 @@
+name: "Evaluate Gates"
+
+on:
+  workflow_call:
+    inputs:
+      sonar-results-file:
+        description: "Path to SonarCloud results JSON"
+        required: true
+        type: string
+      snyk-results-file:
+        description: "Path to Snyk dependency scan JSON"
+        required: true
+        type: string
+      snyk-code-results-file:
+        description: "Path to Snyk SAST scan JSON"
+        required: false
+        type: string
+        default: ""
+      overrides-file:
+        description: "Developer overrides thresholds.json"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      gate-result:
+        description: "Final decision: PASS / WARN / BLOCK"
+        value: ${{ jobs.evaluate.outputs.gate-result }}
+      gate-reason:
+        description: "Explanation of the decision"
+        value: ${{ jobs.evaluate.outputs.gate-reason }}
+
+jobs:
+  evaluate:
+    name: Evaluate Security & Quality Gates
+    runs-on: ubuntu-latest
+
+    outputs:
+      gate-result: ${{ steps.calc.outputs.gate-result }}
+      gate-reason: ${{ steps.calc.outputs.gate-reason }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load Artifacts
+        run: |
+          echo "Sonar results:  ${{ inputs.sonar-results-file }}"
+          echo "Snyk results:   ${{ inputs.snyk-results-file }}"
+          echo "Overrides file: ${{ inputs.overrides-file }}"
+
+      - name: Evaluate Gates Logic
+        id: calc
+        run: |
+          echo "Evaluating gates..."
+
+          # ----- READ SONAR RESULTS -----
+          if [ ! -f "${{ inputs.sonar-results-file }}" ]; then
+            echo "gate-result=BLOCK" >> $GITHUB_OUTPUT
+            echo "gate-reason=Missing Sonar results file" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          SONAR_STATUS=$(jq -r '.quality_gate.status' "${{ inputs.sonar-results-file }}")
+          CODE_SMELLS=$(jq -r '.metrics.code_smells' "${{ inputs.sonar-results-file }}")
+          VULNS=$(jq -r '.metrics.vulnerabilities' "${{ inputs.sonar-results-file }}")
+          COVERAGE=$(jq -r '.metrics.coverage' "${{ inputs.sonar-results-file }}")
+
+          # ----- READ SNYK RESULTS -----
+          if [ ! -f "${{ inputs.snyk-results-file }}" ]; then
+            SNYK_CRITICAL=0
+            SNYK_HIGH=0
+          else
+            SNYK_CRITICAL=$(jq '.vulnerabilities | map(select(.severity=="critical")) | length' "${{ inputs.snyk-results-file }}")
+            SNYK_HIGH=$(jq '.vulnerabilities | map(select(.severity=="high")) | length' "${{ inputs.snyk-results-file }}")
+          fi
+
+          # ----- LOAD OVERRIDES -----
+          if [ -f "${{ inputs.overrides-file }}" ]; then
+            COV_MIN=$(jq -r '.coverage_min // 0' "${{ inputs.overrides-file }}")
+            SMELLS_MAX=$(jq -r '.code_smells_max // 9999' "${{ inputs.overrides-file }}")
+            VULN_MAX=$(jq -r '.sonar_vulns_max // 0' "${{ inputs.overrides-file }}")
+          else
+            COV_MIN=0
+            SMELLS_MAX=9999
+            VULN_MAX=0
+          fi
+
+          # ----- DECISION LOGIC -----
+          RESULT="PASS"
+          REASON="All gates passed"
+
+          # 1. Sonar Quality Gate
+          if [ "$SONAR_STATUS" != "OK" ]; then
+            RESULT="BLOCK"
+            REASON="SonarQube Quality Gate FAILED"
+          fi
+
+          # 2. Coverage
+          if (( $(echo "$COVERAGE < $COV_MIN" | bc -l) )); then
+            RESULT="BLOCK"
+            REASON="Coverage below threshold (${COVERAGE}% < ${COV_MIN}%)"
+          fi
+
+          # 3. Code Smells
+          if [ "$CODE_SMELLS" -gt "$SMELLS_MAX" ]; then
+            RESULT="WARN"
+            REASON="Code smells exceed limit ($CODE_SMELLS > $SMELLS_MAX)"
+          fi
+
+          # 4. Snyk Critical Vulnerabilities
+          if [ "$SNYK_CRITICAL" -gt 0 ]; then
+            RESULT="BLOCK"
+            REASON="Critical vulnerabilities detected ($SNYK_CRITICAL)"
+          fi
+
+          # 5. Snyk High Vulnerabilities
+          if [ "$SNYK_HIGH" -gt 5 ]; then
+            RESULT="WARN"
+            REASON="High vulnerabilities exceed allowed range ($SNYK_HIGH)"
+          fi
+
+          echo "gate-result=$RESULT" >> $GITHUB_OUTPUT
+          echo "gate-reason=$REASON" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: |
+          echo "### 🔐 Gate Evaluation" >> $GITHUB_STEP_SUMMARY
+          echo "- **Result:** ${{ steps.calc.outputs.gate-result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reason:** ${{ steps.calc.outputs.gate-reason }}" >> $GITHUB_STEP_SUMMARY
