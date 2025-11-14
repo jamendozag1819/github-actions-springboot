@@ -29,6 +29,7 @@ jobs:
           
       - name: Build Spring Boot application
         run: |
+         chmod +x mvnw
          ./mvnw clean verify
           
       - name: Package application
