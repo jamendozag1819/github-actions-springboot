@@ -7,7 +7,7 @@
   "test_pass_rate_min": 80,
 
   "coverage_min": 80,
-  "code_smells_max": 100,
+  "code_smells_max": 0,
   "bugs_max": 0,
   "sonar_vulns_max": 0,
   "duplication_max_percent": 5
