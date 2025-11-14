@@ -135,7 +135,7 @@ jobs:
           echo "SONARQUBE_CONFIGURED=true" >> $GITHUB_OUTPUT
 
           chmod +x mvnw
-          mvnw compile
+          ./mvnw compile
           ./mvnw sonar:sonar \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=$SONAR_TOKEN \
