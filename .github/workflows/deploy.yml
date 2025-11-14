@@ -2,9 +2,9 @@ name: CI/CD Pipeline (AWS + Openshift)
 
 on:
   push:
-    branches: [ main, 'release/*' ]
+    branches: [ main, 'release*' ]
   pull_request:
-    branches: [ main, 'release/*' ]
+    branches: [ main, 'release*' ]
   workflow_dispatch:
     inputs:
       override_gates:
