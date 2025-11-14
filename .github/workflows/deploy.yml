@@ -63,5 +63,6 @@ jobs:
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
   load-overrides:
+    needs: [code-quality,security-scan]
     name: Load Developer Overrides
     uses: ./.github/workflows/load-overrides.yml
