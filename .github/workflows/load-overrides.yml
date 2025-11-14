@@ -64,7 +64,7 @@ jobs:
         if: steps.load_dev.outputs.file_exists == 'true'
         run: |
           echo "🛠 Normalizando thresholds.json..."
-          sed -E 's/^([[:space:]]*)([A-Za-z0-9_]+):/\1"\2":/g' thresholds.json > fixed.json
+          sed -E 's/([[:space:]]*)([A-Za-z0-9_]+):/\1"\2":/g'
           mv fixed.json thresholds.json
 
           echo "Developer JSON corregido:"
