@@ -144,7 +144,7 @@ jobs:
             -Dsonar.projectName="CI/CD Pipeline Security POC" \
             -Dsonar.projectVersion=1.0.0 \
             -Dsonar.java.binaries=target/classes \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/ \
             -Dsonar.qualitygate.wait=true || SONAR_EXIT_CODE=$?
 
           if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
