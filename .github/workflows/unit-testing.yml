@@ -99,7 +99,6 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
-          echo "🧪 Running unit tests with coverage..."
           
           # Set test profile if specified
           PROFILE_ARG=""
@@ -140,7 +139,7 @@ jobs:
           test-reports-path: target/surefire-reports
           coverage-reports-path: target/site/jacoco
           coverage-threshold: ${{ inputs.coverage-threshold }}
-          project-path: api-springboot
+          project-path: .
 
       - name: Determine overall test status
         id: determine_status

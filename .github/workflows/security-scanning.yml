@@ -1,7 +1,8 @@
 name: 'Security Scanning'
 permissions:
   contents: read
-  security-events: write
+  security-events: write   # ← ESTE PERMISO ES NECESARIO PARA SNYK
+
 on:
   workflow_call:
     inputs:
@@ -10,11 +11,6 @@ on:
         required: false
         type: string
         default: '17'
-      thresholds:
-        description: 'Developer-effective threshold config'
-        required: false
-        type: string
-
     secrets:
       SNYK_TOKEN:
         required: true
@@ -63,10 +59,9 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          chmod +x mvnw
           chmod +x snyk-scanning/scripts/validate-snyk.sh
           ./snyk-scanning/scripts/validate-snyk.sh
-          
+
       - name: Run Snyk security scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -81,46 +76,30 @@ jobs:
           # Ensure results directory exists
           mkdir -p snyk-scanning/results
           
-          # Mostrar ruta actual
-          #echo "📍 Current working directory: $(pwd)"
-
-          # Run Snyk test and capture results
-          
           echo "🔍 Running Snyk dependency scan..."
-          snyk test --json > snyk-scanning/results/snyk-results.json || echo "⚠️ Snyk test completed with exit code $?"
-          snyk test --sarif-file-output=snyk-scanning/results/snyk-results.sarif || true
-
+          snyk test --json > ../snyk-scanning/results/snyk-results.json || echo "⚠️ Snyk test completed with exit code $?"
+          
           echo "📊 Checking Snyk results file..."
-          ls -la snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
-
-      - name: 📈 Upload results to GitHub Security tab
-        if: always() && hashFiles('snyk-scanning/results/snyk-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: snyk-scanning/results/snyk-results.sarif
-    
+          ls -la ../snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
+          
       - name: Send results to Snyk UI (Monitor)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
         env:
-            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
+          
           echo "📤 Sending scan results to Snyk dashboard..."
-          pwd
-          ls -la
-          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
+          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/" || true
           
       - name: Run Snyk Code Analysis (SAST)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
+          
           echo "🔍 Running Snyk Code analysis for security issues in source code..."
-          snyk code test --json > snyk-scanning/results/snyk-code-results.json || true
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: target/
+          
+          # Run Snyk Code test (SAST)
+          snyk code test --json > ../snyk-scanning/results/snyk-code-results.json || true
           
       - name: Generate security summary
         id: security-summary
@@ -135,37 +114,6 @@ jobs:
           path: |
             snyk-scanning/results/snyk-results.json
             snyk-scanning/results/snyk-code-results.json
-            snyk-scanning/results/snyk-container-results.json
+            
           if-no-files-found: warn
           retention-days: 1
-
-      - name: Evaluate thresholds (PASS/WARN/FAIL)
-        id: eval-thresholds
-        run: |
-          echo "🔍 Applying thresholds..."
-
-          # Guardar thresholds JSON en archivo temporal
-          echo '${{ inputs.thresholds }}' > thresholds-effective.json
-          cat thresholds-effective.json
-
-          # Cargar valores de thresholds
-          CRITICAL_MAX=$(jq '.critical_vulns_max' thresholds-effective.json)
-          HIGH_MAX=$(jq '.high_vulns_max' thresholds-effective.json)
-
-          # Cargar valores encontrados por Snyk
-          CRITICAL_FOUND=${{ steps.security-summary.outputs.critical-count }}
-          HIGH_FOUND=${{ steps.security-summary.outputs.high-count }}
-
-          echo "Critical found: $CRITICAL_FOUND  (max: $CRITICAL_MAX)"
-          echo "High found:     $HIGH_FOUND      (max: $HIGH_MAX)"
-
-          STATUS="PASS"
-
-          if [ "$CRITICAL_FOUND" -gt "$CRITICAL_MAX" ]; then
-            STATUS="FAIL"
-          elif [ "$HIGH_FOUND" -gt "$HIGH_MAX" ]; then
-            STATUS="WARN"
-          fi
-
-          echo "Final severity status: $STATUS"
-          echo "severity-status=$STATUS" >> $GITHUB_OUTPUT
