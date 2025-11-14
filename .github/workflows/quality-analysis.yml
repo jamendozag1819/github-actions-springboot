@@ -77,17 +77,18 @@ jobs:
       - name: Load thresholds JSON
         id: load_thresholds
         run: |
-          echo "Loading dynamic thresholds…"
+         echo "Loading dynamic thresholds…"
 
-          if [ -z "${{ inputs.thresholds }}" ]; then
-            echo "⚠️ No thresholds received — using empty JSON"
-            echo "{}" > thresholds.json
-          else
-            echo "${{ inputs.thresholds }}" > thresholds.json
-          fi
+         if [ -z "${{ inputs.thresholds }}" ]; then
+         echo "⚠️ No thresholds received — using empty JSON"
+         echo "{}" > thresholds.json
+         else
+         printf '%s' "${{ inputs.thresholds }}" > thresholds.json
+         fi
 
-          echo "Threshold file content:"
-          cat thresholds.json
+         echo "Threshold file content:"
+         cat thresholds.json
+
 
 
       # ========================
