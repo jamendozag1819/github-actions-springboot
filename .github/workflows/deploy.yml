@@ -1,4 +1,8 @@
 name: CI/CD Pipeline (AWS + Openshift)
+permissions:
+  contents: read
+  security-events: write
+
 
 on:
   push:
