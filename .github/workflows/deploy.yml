@@ -36,7 +36,7 @@ jobs:
 
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [build, security-scan, load-overrides]
+    needs: [build, load-overrides]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
