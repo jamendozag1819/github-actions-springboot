@@ -1,4 +1,7 @@
 name: CI/CD Pipeline
+permissions:
+  contents: read
+  security-events: write
 
 on:
   push:
@@ -42,9 +45,6 @@ jobs:
     name: Snyk Analysis
     needs: [build, unit-tests]
     uses: ./.github/workflows/security-scanning.yml
-    permissions:
-      contents: read
-      security-events: write
     with:
       java-version: '17'
       run-container-scan: false
