@@ -155,42 +155,46 @@ jobs:
         id: evaluate_thresholds
         run: |
           echo "📊 Evaluating thresholds for Sonar metrics…"
+          RESULT_FILE="sonarqube-cloud-scanning/results/quality-gate-result.json"
 
-          # Extract metrics
-          coverage=$(jq '.coverage' sonarqube-cloud-scanning/results/quality-gate-result.json)
-          code_smells=$(jq '.code_smells' sonarqube-cloud-scanning/results/quality-gate-result.json)
-          bugs=$(jq '.bugs' sonarqube-cloud-scanning/results/quality-gate-result.json)
-          duplication=$(jq '.duplication' sonarqube-cloud-scanning/results/quality-gate-result.json)
-          vulnerabilities=$(jq '.vulnerabilities' sonarqube-cloud-scanning/results/quality-gate-result.json)
+          # Safe extractor for Sonar metrics (handles null, missing, strings)
+          safe_number() {
+          value=$(jq -r "$1 // 0" "$2" 2>/dev/null)
+          value=$(echo "$value" | sed 's/[^0-9.\-]//g')
+          if [ -z "$value" ]; then value=0; fi
+          echo "$value"
+          }
 
-          # Extract thresholds
-          coverage_min=$(jq '.coverage_min // 0' thresholds.json)
-          code_smells_max=$(jq '.code_smells_max // 9999' thresholds.json)
-          bugs_max=$(jq '.bugs_max // 0' thresholds.json)
-          duplication_max=$(jq '.duplication_max_percent // 100' thresholds.json)
-          sonar_vulns_max=$(jq '.sonar_vulns_max // 0' thresholds.json)
+          # Extract Sonar metrics
+          coverage=$(safe_number '.metrics.coverage' "$RESULT_FILE")
+          code_smells=$(safe_number '.metrics.code_smells' "$RESULT_FILE")
+          bugs=$(safe_number '.metrics.bugs' "$RESULT_FILE")
+          duplication=$(safe_number '.metrics.duplicated_lines_density' "$RESULT_FILE")
+          vulnerabilities=$(safe_number '.metrics.vulnerabilities' "$RESULT_FILE")
+
+          echo "Coverage: $coverage"
+          echo "Code smells: $code_smells"
+          echo "Bugs: $bugs"
+          echo "Duplication: $duplication"
+          echo "Vulnerabilities: $vulnerabilities"
+
+          # Thresholds JSON from load-overrides.yml
+          TH_FILE="thresholds.json"
+
+          coverage_min=$(safe_number '.coverage_min' "$TH_FILE")
+          code_smells_max=$(safe_number '.code_smells_max' "$TH_FILE")
+          bugs_max=$(safe_number '.bugs_max' "$TH_FILE")
+          duplication_max=$(safe_number '.duplication_max_percent' "$TH_FILE")
+          sonar_vulns_max=$(safe_number '.sonar_vulns_max' "$TH_FILE")
 
           status="PASSED"
 
-          if (( $(echo "$coverage < $coverage_min" | bc -l) )); then
-            status="FAILED"
-          fi
-
-          if [ "$code_smells" -gt "$code_smells_max" ]; then
-            status="FAILED"
-          fi
-
-          if [ "$bugs" -gt "$bugs_max" ]; then
-            status="FAILED"
-          fi
-
-          if (( $(echo "$duplication > $duplication_max" | bc -l) )); then
-            status="FAILED"
-          fi
-
-          if [ "$vulnerabilities" -gt "$sonar_vulns_max" ]; then
-            status="FAILED"
-          fi
+          # Apply threshold rules
+          if (( $(echo "$coverage < $coverage_min" | bc -l) )); then status="FAILED"; fi
+          if (( $(echo "$code_smells > $code_smells_max" | bc -l) )); then status="FAILED"; fi
+          if (( $(echo "$bugs > $bugs_max" | bc -l) )); then status="FAILED"; fi
+          if (( $(echo "$duplication > $duplication_max" | bc -l) )); then status="FAILED"; fi
+          if (( $(echo "$vulnerabilities > $sonar_vulns_max" | bc -l) )); then status="FAILED"; fi
 
           echo "FINAL_THRESHOLD_STATUS=$status" >> $GITHUB_OUTPUT
 
