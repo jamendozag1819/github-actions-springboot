@@ -112,7 +112,7 @@ jobs:
               -Dsonar.qualitygate.wait=true \
               -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
             
-            cd ..
+            
             
             # Capture quality gate status with better error handling
             if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
