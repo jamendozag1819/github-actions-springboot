@@ -71,3 +71,6 @@ jobs:
     needs: [ load-overrides ]
     name: Evaluate Gates
     uses: ./.github/workflows/evaluate-gates.yml
+    with:
+      sonar-results-file: "sonarqube-cloud-scanning/results/quality-gate-result.json"
+      snyk-results-file: "snyk-scanning/results/snyk-results.json"
