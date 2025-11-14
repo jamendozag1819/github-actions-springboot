@@ -1,46 +1,59 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline (AWS + Openshift)
 
 on:
   push:
     branches: [ main, 'release/*' ]
   pull_request:
     branches: [ main, 'release/*' ]
+  workflow_dispatch:
+    inputs:
+      override_gates:
+        description: 'Override Safe Deployment Gate (emergency deployment only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
-permissions:
-  contents: read
-  security-events: write
+env:
+  JAVA_VERSION: '17'
+  MAVEN_VERSION: '3.8.6'
 
 jobs:
-  load-overrides:
-    name: Load Developer Overrides
-    uses: ./.github/workflows/load-overrides.yml
-
   build:
-    name: Build & Test Job
-    needs: [load-overrides]
+    name: Build Application
     uses: ./.github/workflows/build-application.yml
     with:
       java-version: '17'
       maven-version: '3.8.6'
-
+          
+  unit-tests:
+    name: Unit Tests & Coverage
+    needs: build
+    uses: ./.github/workflows/unit-testing.yml
+    with:
+      java-version: '17'
+      coverage-threshold: 50
+      fail-on-coverage: false
+      
   security-scan:
     name: Snyk Analysis
-    needs: [build, load-overrides]
+    needs: [build, unit-tests]
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: '17'
-      thresholds: ${{ needs.load-overrides.outputs.thresholds }}
+      run-container-scan: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
 
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [build, load-overrides]
+    needs: [build, unit-tests]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
-      thresholds: ${{ needs.load-overrides.outputs.thresholds }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
