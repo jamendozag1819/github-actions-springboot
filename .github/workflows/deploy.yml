@@ -19,11 +19,6 @@ on:
           - 'false'
           - 'true'
 
-env:
-  JAVA_VERSION: '17'
-  MAVEN_VERSION: '3.8.6'
-  DOCKER_BUILDKIT: 1
-
 jobs:
   build:
     name: Build Application
@@ -63,12 +58,12 @@ jobs:
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
   load-overrides:
-    needs: [code-quality,security-scan]
+    needs: [build, unit-tests]
     name: Load Developer Overrides
     uses: ./.github/workflows/load-overrides.yml
 
   evaluate-gates:
-    needs: [ load-overrides ]
+    needs: [ code-quality,security-scan,load-overrides ]
     name: Evaluate Gates
     uses: ./.github/workflows/evaluate-gates.yml
     with:
