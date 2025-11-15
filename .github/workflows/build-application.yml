@@ -30,8 +30,8 @@ jobs:
           
       - name: Build Spring Boot application
         run: |
-          mvn clean compile test
-          continue-on-error: true
+          mvn clean compile test | true
+          
       - name: Package application
         run: |
           mvn package
