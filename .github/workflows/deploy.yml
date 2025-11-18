@@ -19,6 +19,14 @@ on:
           - 'false'
           - 'true'
 
+env:
+  JAVA_VERSION: '17'
+  MAVEN_VERSION: '3.8.6'
+  DOCKER_BUILDKIT: 1
+  PDP_URL: http://localhost:7766
+  REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
+  REGISTRY_REPOSITORY: "dev-pipeline-docker-docker"
+
 jobs:
   build:
     name: Build Application
@@ -63,10 +71,13 @@ jobs:
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
   evaluate-gates:
-    needs: [ code-quality,security-scan ]
-    name: Evaluate Gates
+    needs: [ code-quality, security-scan ]
+    name: Evaluate Gates (Enterprise)
     uses: ./.github/workflows/evaluate-gates.yml
     with:
       sonar-results-file: "sonarqube-cloud-scanning/results/quality-gate-result.json"
       snyk-results-file: "snyk-scanning/results/snyk-results.json"
+      snyk-code-results-file: "snyk-scanning/results/snyk-code-results.json"
       overrides-file: "overrides/final-thresholds.json"
+      # pass override flag in case manual emergency execution is used
+      manual-override: ${{ github.event.inputs.override_gates || 'false' }}

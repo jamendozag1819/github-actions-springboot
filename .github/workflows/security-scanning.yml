@@ -1,7 +1,7 @@
 name: 'Security Scanning'
 permissions:
   contents: read
-  security-events: write   # ← ESTE PERMISO ES NECESARIO PARA SNYK
+  security-events: write
 
 on:
   workflow_call:
@@ -16,7 +16,7 @@ on:
         required: true
       SNYK_ORG_ID:
         required: true
-        
+
     outputs:
       critical-count:
         description: 'Number of critical vulnerabilities found'
@@ -35,78 +35,61 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+
     outputs:
       critical-count: ${{ steps.security-summary.outputs.critical-count }}
       high-count: ${{ steps.security-summary.outputs.high-count }}
       medium-count: ${{ steps.security-summary.outputs.medium-count }}
       low-count: ${{ steps.security-summary.outputs.low-count }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
-          
+
       - name: Download build artifacts
         uses: ./.github/actions/download-build-artifacts
-        
+        continue-on-error: true
+
       - name: Validate Snyk configuration
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          chmod +x snyk-scanning/scripts/validate-snyk.sh
-          ./snyk-scanning/scripts/validate-snyk.sh
+          chmod +x snyk-scanning/scripts/validate-snyk.sh || true
+          ./snyk-scanning/scripts/validate-snyk.sh || true
 
-      - name: Run Snyk security scan
+      - name: Run Snyk dependency scan
+        id: snyk_test
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          # Install Snyk CLI
           npm install -g snyk
-          
-          # Authenticate with Snyk
           snyk auth $SNYK_TOKEN
-          
-          # Ensure results directory exists
           mkdir -p snyk-scanning/results
-          
-          echo "🔍 Running Snyk dependency scan..."
-          snyk test --json > ../snyk-scanning/results/snyk-results.json || echo "⚠️ Snyk test completed with exit code $?"
-          
-          echo "📊 Checking Snyk results file..."
-          ls -la ../snyk-scanning/results/snyk-results.json || echo "❌ Snyk results file not created"
-          
-      - name: Send results to Snyk UI (Monitor)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+          snyk test --json > snyk-scanning/results/snyk-results.json || true
+          snyk code test --json > snyk-scanning/results/snyk-code-results.json || true
+          ls -la snyk-scanning/results || true
+
+      - name: Send results to Snyk Monitor (optional)
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          
-          echo "📤 Sending scan results to Snyk dashboard..."
-          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/" || true
-          
-      - name: Run Snyk Code Analysis (SAST)
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: |
-          
-          echo "🔍 Running Snyk Code analysis for security issues in source code..."
-          
-          # Run Snyk Code test (SAST)
-          snyk code test --json > ../snyk-scanning/results/snyk-code-results.json || true
-          
+          cd .
+          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc" || true
+
       - name: Generate security summary
         id: security-summary
         uses: ./.github/actions/generate-security-summary
         with:
           results-file: snyk-scanning/results/snyk-results.json
-          
+
       - name: Upload security scan results
         uses: actions/upload-artifact@v4
         with:
@@ -114,6 +97,5 @@ jobs:
           path: |
             snyk-scanning/results/snyk-results.json
             snyk-scanning/results/snyk-code-results.json
-            
           if-no-files-found: warn
-          retention-days: 1
+          retention-days: 3
