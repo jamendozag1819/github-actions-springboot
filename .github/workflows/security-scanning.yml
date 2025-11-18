@@ -114,7 +114,6 @@ jobs:
          echo "📄 POM: $POM"
          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-         cd "$DIR"
          pwd
          echo "📦 Generating dependency tree..."
          chmod +x mvnw
