@@ -88,9 +88,11 @@ jobs:
           pwd
           echo "📁 Contenido del directorio actual:"
           ls -la
-          echo "📦 Árbol completo de carpetas:"
-          ls -R .
-          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc" || true
+          snyk monitor \
+          --file=pom.xml \
+          --package-manager=maven \
+          --org=$SNYK_ORG_ID \
+          --project-name="cicd-pipeline-poc" || true
 
       - name: Generate security summary
         id: security-summary
