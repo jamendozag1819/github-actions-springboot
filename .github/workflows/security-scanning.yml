@@ -92,9 +92,10 @@ jobs:
          echo "❌ No pom.xml found. Cannot run snyk monitor."
          exit 0
          fi
-
+         
          # Use mvnw if available, fallback to mvn
          if [ -f "./mvnw" ]; then
+         chmod +x mvnw 
          MVN="./mvnw -q"
          echo "✔ Using Maven Wrapper (mvnw)"
          else
