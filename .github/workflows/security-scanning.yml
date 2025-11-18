@@ -76,23 +76,61 @@ jobs:
           snyk code test --json > snyk-scanning/results/snyk-code-results.json || true
           ls -la snyk-scanning/results || true
 
-      - name: Send results to Snyk Monitor (optional)
-        if: startsWith(github.ref, 'refs/heads/main') ||
-         startsWith(github.ref, 'refs/heads/release') ||
-         github.event_name == 'workflow_dispatch'
-
+      - name: Send results to Snyk Monitor (Advanced)
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+         SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          echo "📌 Ruta actual:"
-          pwd
-          echo "📁 Contenido del directorio actual:"
-          ls -la
-          snyk monitor \
-          --file=pom.xml \
-          --package-manager=maven \
-          --org=$SNYK_ORG_ID \
-          --project-name="cicd-pipeline-poc" || true
+         echo "🔍 Searching for pom.xml files..."
+         POMS=$(find . -maxdepth 4 -name "pom.xml")
+
+         echo "📁 Found the following pom.xml files:"
+         echo "$POMS"
+
+         if [ -z "$POMS" ]; then
+         echo "❌ No pom.xml found. Cannot run snyk monitor."
+         exit 0
+         fi
+
+         # Use mvnw if available, fallback to mvn
+         if [ -f "./mvnw" ]; then
+         MVN="./mvnw -q"
+         echo "✔ Using Maven Wrapper (mvnw)"
+         else
+         MVN="mvn -q"
+         echo "✔ Using system Maven (mvn)"
+         fi
+
+         # Loop through all pom.xml files
+         for POM in $POMS; do
+         DIR=$(dirname "$POM")
+
+         echo ""
+         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+         echo "📌 Processing module:"
+         echo "📍 Directory: $DIR"
+         echo "📄 POM: $POM"
+         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+         cd "$DIR"
+         echo "📦 Generating dependency tree..."
+         $MVN dependency:tree -DoutputType=dot --batch-mode --non-recursive || echo "⚠ Maven dependency tree failed"
+
+         echo "🛰 Running Snyk monitor..."
+         snyk monitor \
+         --file=pom.xml \
+         --package-manager=maven \
+         --all-projects=false \
+         --org=$SNYK_ORG_ID \
+         --project-name="cicd-pipeline-poc:${DIR#./}" \
+         || echo "⚠ Snyk monitor failed for $DIR"
+
+         cd - > /dev/null
+         done
+
+         echo "✅ Snyk monitor execution completed"
+
 
       - name: Generate security summary
         id: security-summary
