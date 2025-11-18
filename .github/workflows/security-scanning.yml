@@ -123,7 +123,6 @@ jobs:
          echo "🛰 Running Snyk monitor..."
          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
 
-         cd - > /dev/null
          done
 
          echo "✅ Snyk monitor execution completed"
