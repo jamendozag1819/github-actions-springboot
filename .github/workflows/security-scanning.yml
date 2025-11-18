@@ -111,6 +111,7 @@ jobs:
          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
          echo "📌 Processing module:"
          echo "📍 Directory: $DIR"
+         pwd
          echo "📄 POM: $POM"
          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
