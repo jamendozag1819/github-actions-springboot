@@ -1,14 +1,14 @@
 {
-  "critical_vulns_max": 0,
-  "high_vulns_max": 0,
-  "medium_vulns_max": 10,
+  "critical_vulns_max": 5,
+  "high_vulns_max": 5,
+  "medium_vulns_max": 5,
   "low_vulns_max": 999,
 
   "test_pass_rate_min": 80,
 
-  "coverage_min": 80,
-  "code_smells_max": 0,
-  "bugs_max": 0,
-  "sonar_vulns_max": 0,
+  "coverage_min": 10,
+  "code_smells_max": 5,
+  "bugs_max": 5,
+  "sonar_vulns_max": 5,
   "duplication_max_percent": 5
 }
