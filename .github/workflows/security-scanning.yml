@@ -117,7 +117,7 @@ jobs:
          cd "$DIR"
          pwd
          echo "📦 Generating dependency tree..."
-         chmod +x $MVN 
+         chmod +x mvnw
          $MVN dependency:tree -DoutputType=dot --batch-mode --non-recursive || echo "⚠ Maven dependency tree failed"
 
          echo "🛰 Running Snyk monitor..."
