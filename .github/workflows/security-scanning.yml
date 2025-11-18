@@ -117,10 +117,10 @@ jobs:
          cd "$DIR"
          pwd
          echo "📦 Generating dependency tree..."
+         chmod +x $MVN 
          $MVN dependency:tree -DoutputType=dot --batch-mode --non-recursive || echo "⚠ Maven dependency tree failed"
 
          echo "🛰 Running Snyk monitor..."
-         chmod +x mvnw 
          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
 
          done
