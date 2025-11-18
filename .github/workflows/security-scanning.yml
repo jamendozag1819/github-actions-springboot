@@ -74,7 +74,7 @@ jobs:
           mkdir -p snyk-scanning/results
           snyk test --json > snyk-scanning/results/snyk-results.json || true
           snyk code test --json > snyk-scanning/results/snyk-code-results.json || true
-          ls -la snyk-scanning/results || true
+          ls -la snyk-scanning/results/snyk-results.json || true
 
       - name: Send results to Snyk Monitor (Advanced)
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release') || github.event_name == 'workflow_dispatch'
@@ -118,13 +118,7 @@ jobs:
          $MVN dependency:tree -DoutputType=dot --batch-mode --non-recursive || echo "⚠ Maven dependency tree failed"
 
          echo "🛰 Running Snyk monitor..."
-         snyk monitor \
-         --file=pom.xml \
-         --package-manager=maven \
-         --all-projects=false \
-         --org=$SNYK_ORG_ID \
-         --project-name="cicd-pipeline-poc:${DIR#./}" \
-         || echo "⚠ Snyk monitor failed for $DIR"
+         snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
 
          cd - > /dev/null
          done
