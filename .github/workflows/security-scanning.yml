@@ -95,7 +95,6 @@ jobs:
          
          # Use mvnw if available, fallback to mvn
          if [ -f "./mvnw" ]; then
-         chmod +x mvnw 
          MVN="./mvnw -q"
          echo "✔ Using Maven Wrapper (mvnw)"
          else
@@ -121,12 +120,11 @@ jobs:
          $MVN dependency:tree -DoutputType=dot --batch-mode --non-recursive || echo "⚠ Maven dependency tree failed"
 
          echo "🛰 Running Snyk monitor..."
+         chmod +x mvnw 
          snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
 
          done
-
          echo "✅ Snyk monitor execution completed"
-
 
       - name: Generate security summary
         id: security-summary
