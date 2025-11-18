@@ -36,9 +36,14 @@ jobs:
       coverage-threshold: 50
       fail-on-coverage: false
 
+  load-overrides:
+    needs: build
+    name: Load Developer Overrides
+    uses: ./.github/workflows/load-overrides.yml
+
   security-scan:
     name: Snyk Analysis
-    needs: [build, unit-tests]
+    needs: [load-overrides, unit-tests]
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: '17'
@@ -48,7 +53,7 @@ jobs:
   
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [build, unit-tests]
+    needs: [load-overrides, unit-tests]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
@@ -57,13 +62,8 @@ jobs:
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
-  load-overrides:
-    needs: [build, unit-tests]
-    name: Load Developer Overrides
-    uses: ./.github/workflows/load-overrides.yml
-
   evaluate-gates:
-    needs: [ code-quality,security-scan,load-overrides ]
+    needs: [ code-quality,security-scan ]
     name: Evaluate Gates
     uses: ./.github/workflows/evaluate-gates.yml
     with:
