@@ -84,7 +84,12 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          cd api-springboot
+          echo "📌 Ruta actual:"
+          pwd
+          echo "📁 Contenido del directorio actual:"
+          ls -la
+          echo "📦 Árbol completo de carpetas:"
+          ls -R .
           snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc" || true
 
       - name: Generate security summary
