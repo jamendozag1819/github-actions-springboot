@@ -70,6 +70,7 @@ jobs:
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
           npm install -g snyk
+          chmod +x mvnw
           snyk auth $SNYK_TOKEN
           mkdir -p snyk-scanning/results
           snyk test --json > snyk-scanning/results/snyk-results.json || true
