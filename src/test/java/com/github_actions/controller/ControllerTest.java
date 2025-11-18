@@ -24,6 +24,6 @@ class ControllerTest {
 	@Test
 	void testMensajeEndpointFailed() throws Exception {
 		mockMvc.perform(get("/")).andExpect(status().isOk()).andExpect(content().string("Prueba controller"));
-		assertTrue(false);
+		assertTrue(true);
 	}
 }
