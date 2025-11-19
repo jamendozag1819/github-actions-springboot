@@ -43,5 +43,17 @@ public class Controller {
 		System.out.println("f");
 		System.out.println("g"); // 7+ líneas sin sentido → code smell
 	}
+	
+	public class BugStringComparison {
+
+	    public boolean isAdmin(String role) {
+	        // ❌ BUG: comparación de strings con ==
+	        if (role == "ADMIN") {
+	            return true;
+	        }
+	        return false;
+	    }
+	}
+
 
 }

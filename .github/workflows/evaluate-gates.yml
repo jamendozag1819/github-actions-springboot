@@ -362,3 +362,69 @@ jobs:
           if [ -f gate-decision.json ]; then
             echo "### Gate decision file attached as artifact: gate-decision.json" >> $GITHUB_STEP_SUMMARY
           fi
+      
+      - name: GitHub Summary
+        if: always()
+        run: |
+         echo "## 🔐 Gate Evaluation Result" >> $GITHUB_STEP_SUMMARY
+         echo "" >> $GITHUB_STEP_SUMMARY
+
+         # Load JSON
+         DECISION=$(jq -r '.decision' gate-decision.json)
+         REASON=$(jq -r '.reason' gate-decision.json)
+
+         # Sonar metrics
+         SONAR_STATUS="${SONAR_STATUS:-UNKNOWN}"
+         COVERAGE="${COVERAGE:-0}"
+         BUGS="${BUGS:-0}"
+         SONAR_VULNS="${VULNS:-0}"
+
+         # Snyk metrics
+         SNYK_CRIT="${SNYK_CRITICAL:-0}"
+         SNYK_HIGH="${SNYK_HIGH:-0}"
+         SNYK_MED="${SNYK_MEDIUM:-0}"
+
+         echo "### 🧪 Resultados de Puertas (Tabla Consolidada)" >> $GITHUB_STEP_SUMMARY
+         echo "" >> $GITHUB_STEP_SUMMARY
+
+         echo "| Sistema | Estado | Métricas | Umbrales | Resultado |" >> $GITHUB_STEP_SUMMARY
+         echo "|---------|--------|----------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
+
+         #### SNYK DEPENDENCIES
+         if [ "$SNYK_CRIT" -le "$CRITICAL_MAX" ] && \
+         [ "$SNYK_HIGH" -le "$HIGH_MAX" ] && \
+         [ "$SNYK_MED" -le "$MEDIUM_MAX" ]; then
+         SNYK_STATUS="✅ Passed"
+         elif [ "$SNYK_HIGH" -gt "$HIGH_MAX" ] || [ "$SNYK_CRIT" -gt "$CRITICAL_MAX" ]; then
+         SNYK_STATUS="❌ Failed"
+         else
+         SNYK_STATUS="⚠️ Warning"
+         fi
+
+         echo "| **Snyk Dependencies** | $SNYK_STATUS | Critical: $SNYK_CRIT<br>High: $SNYK_HIGH<br>Medium: $SNYK_MED | Critical ≤ $CRITICAL_MAX<br>High ≤ $HIGH_MAX<br>Medium ≤ $MEDIUM_MAX | $SNYK_STATUS |" >> $GITHUB_STEP_SUMMARY
+
+         #### SONARQUBE
+         if [[ "$SONAR_STATUS" == "OK" || "$SONAR_STATUS" == "PASSED" ]]; then
+         SONAR_STATE="✅ Passed"
+         elif [[ "$SONAR_STATUS" == "ERROR" || "$BUGS" -gt "$BUGS_MAX" ]]; then
+         SONAR_STATE="❌ Failed"
+         else
+         SONAR_STATE="⚠️ Warning"
+         fi
+
+         echo "| **SonarQube Quality Gate** | $SONAR_STATE | Coverage: ${COVERAGE}%<br>Bugs: $BUGS<br>Vulnerabilities: $SONAR_VULNS | Coverage ≥ $COVERAGE_MIN%<br>Bugs ≤ $BUGS_MAX<br>Vulns ≤ $SONAR_VULNS_MAX | $SONAR_STATE |" >> $GITHUB_STEP_SUMMARY
+
+         echo "" >> $GITHUB_STEP_SUMMARY
+         echo "### 🏷️ Tipos de Estado" >> $GITHUB_STEP_SUMMARY
+
+         echo "| Icono | Estado | Significado | ¿Se puede fusionar? |" >> $GITHUB_STEP_SUMMARY
+         echo "|-------|---------|------------|----------------------|" >> $GITHUB_STEP_SUMMARY
+         echo "| ✅ | **APROBAR** | Todas las comprobaciones superadas | Sí |" >> $GITHUB_STEP_SUMMARY
+         echo "| ⚠️ | **ADVERTIR** | Advertencia (puerta NO APLICABLE) | Sí |" >> $GITHUB_STEP_SUMMARY
+         echo "| ❌ | **FALLAR** | Falló la puerta de acceso | No* |" >> $GITHUB_STEP_SUMMARY
+         echo "| 🟦 | **APROBADO CON EXCEPCIÓN** | Falló pero se aprobó excepción | Sí |" >> $GITHUB_STEP_SUMMARY
+
+         echo "" >> $GITHUB_STEP_SUMMARY
+         echo "### 📌 Resultado Global" >> $GITHUB_STEP_SUMMARY
+         echo "**Estado Final:** $DECISION" >> $GITHUB_STEP_SUMMARY
+         echo "**Motivo:** $REASON" >> $GITHUB_STEP_SUMMARY
