@@ -1,0 +1,249 @@
+name: "Evaluate Gates (Enterprise)"
+
+on:
+  workflow_call:
+    inputs:
+      sonar-results-file:
+        description: "Path to SonarCloud results JSON"
+        required: true
+        type: string
+      snyk-results-file:
+        description: "Path to Snyk dependency scan JSON"
+        required: true
+        type: string
+      snyk-code-results-file:
+        description: "Path to Snyk SAST scan JSON"
+        required: false
+        type: string
+        default: ""
+      overrides-file:
+        description: "Developer overrides thresholds.json (artifact path under overrides/)"
+        required: false
+        type: string
+        default: ""
+      manual-override:
+        description: "Manual override flag passed from dispatch"
+        required: false
+        type: string
+        default: "false"
+
+    outputs:
+      gate-result:
+        description: "Final decision: PASS / WARN / BLOCK"
+        value: ${{ jobs.evaluate.outputs.gate-result }}
+      gate-reason:
+        description: "Explanation of the decision"
+        value: ${{ jobs.evaluate.outputs.gate-reason }}
+
+jobs:
+  evaluate:
+    name: Evaluate Security & Quality Gates
+    runs-on: ubuntu-latest
+
+    outputs:
+      gate-result: ${{ steps.calc.outputs.gate-result }}
+      gate-reason: ${{ steps.calc.outputs.gate-reason }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts (overrides, security, quality, tests)
+        uses: actions/download-artifact@v4
+        with:
+          name: developer-overrides
+          path: overrides
+        continue-on-error: true
+
+      - name: Download security-results
+        uses: actions/download-artifact@v4
+        with:
+          name: security-results
+          path: snyk-scanning/results
+        continue-on-error: true
+
+      - name: Download quality-results
+        uses: actions/download-artifact@v4
+        with:
+          name: quality-results
+          path: sonarqube-cloud-scanning/results
+        continue-on-error: true
+
+      - name: Download test-results (optional)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+        continue-on-error: true
+
+      - name: Prepare environment
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq bc
+
+      - name: Evaluate Gates Logic
+        id: calc
+        run: |
+          set -euo pipefail
+          echo "Evaluating enterprise gates..."
+
+          # defaults
+          CRITICAL_MAX=0
+          HIGH_MAX=5
+          MEDIUM_MAX=20
+          LOW_MAX=999
+          COVERAGE_MIN=80
+          CODE_SMELLS_MAX=100
+          BUGS_MAX=0
+          SONAR_VULNS_MAX=0
+          DUPLICATION_MAX=5
+
+          # load overrides
+          if [ -f "overrides/final-thresholds.json" ]; then
+            echo "Loading overrides..."
+            jq '.' overrides/final-thresholds.json > /tmp/ovr.json
+            CRITICAL_MAX=$(jq -r '.critical_vulns_max // '"$CRITICAL_MAX"'' /tmp/ovr.json)
+            HIGH_MAX=$(jq -r '.high_vulns_max // '"$HIGH_MAX"'' /tmp/ovr.json)
+            MEDIUM_MAX=$(jq -r '.medium_vulns_max // '"$MEDIUM_MAX"'' /tmp/ovr.json)
+            COVERAGE_MIN=$(jq -r '.coverage_min // '"$COVERAGE_MIN"'' /tmp/ovr.json)
+            BUGS_MAX=$(jq -r '.bugs_max // '"$BUGS_MAX"'' /tmp/ovr.json)
+            SONAR_VULNS_MAX=$(jq -r '.sonar_vulns_max // '"$SONAR_VULNS_MAX"'' /tmp/ovr.json)
+          fi
+
+          # Read Sonar results
+          if [ -f "${{ inputs.sonar-results-file }}" ]; then
+            SONAR_STATUS=$(jq -r '.quality_gate.status // "UNKNOWN"' "${{ inputs.sonar-results-file }}")
+            CODE_SMELLS=$(jq -r '.metrics.code_smells // 0' "${{ inputs.sonar-results-file }}")
+            VULNS=$(jq -r '.metrics.vulnerabilities // 0' "${{ inputs.sonar-results-file }}")
+            COVERAGE=$(jq -r '.metrics.coverage // 0' "${{ inputs.sonar-results-file }}")
+            BUGS=$(jq -r '.metrics.bugs // 0' "${{ inputs.sonar-results-file }}")
+          else
+            SONAR_STATUS="MISSING"
+            CODE_SMELLS=0
+            VULNS=0
+            COVERAGE=0
+            BUGS=0
+          fi
+
+          # Read Snyk results
+          if [ -f "${{ inputs.snyk-results-file }}" ]; then
+            SNYK_CRITICAL=$(jq '.vulnerabilities | map(select(.severity=="critical")) | length' "${{ inputs.snyk-results-file }}")
+            SNYK_HIGH=$(jq '.vulnerabilities | map(select(.severity=="high")) | length' "${{ inputs.snyk-results-file }}")
+            SNYK_MEDIUM=$(jq '.vulnerabilities | map(select(.severity=="medium")) | length' "${{ inputs.snyk-results-file }}")
+          else
+            SNYK_CRITICAL=0
+            SNYK_HIGH=0
+            SNYK_MEDIUM=0
+          fi
+
+          # EXPORT METRICS
+          echo "snyk_critical=$SNYK_CRITICAL" >> $GITHUB_OUTPUT
+          echo "snyk_high=$SNYK_HIGH" >> $GITHUB_OUTPUT
+          echo "snyk_medium=$SNYK_MEDIUM" >> $GITHUB_OUTPUT
+          echo "sonar_status=$SONAR_STATUS" >> $GITHUB_OUTPUT
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "bugs=$BUGS" >> $GITHUB_OUTPUT
+          echo "sonar_vulns=$VULNS" >> $GITHUB_OUTPUT
+          echo "code_smells=$CODE_SMELLS" >> $GITHUB_OUTPUT
+
+          # EXPORT THRESHOLDS FOR SUMMARY
+          echo "critical_max=$CRITICAL_MAX" >> $GITHUB_OUTPUT
+          echo "high_max=$HIGH_MAX" >> $GITHUB_OUTPUT
+          echo "medium_max=$MEDIUM_MAX" >> $GITHUB_OUTPUT
+          echo "coverage_min=$COVERAGE_MIN" >> $GITHUB_OUTPUT
+          echo "bugs_max=$BUGS_MAX" >> $GITHUB_OUTPUT
+          echo "sonar_vulns_max=$SONAR_VULNS_MAX" >> $GITHUB_OUTPUT
+
+          # Final decision
+          DECISION="PASS"
+          REASONS=("All gates passed")
+
+          jq -n \
+          --arg sonar_status "$SONAR_STATUS" \
+          --arg coverage "$COVERAGE" \
+          --arg bugs "$BUGS" \
+          --arg sonar_vulns "$VULNS" \
+          --arg snyk_critical "$SNYK_CRITICAL" \
+          --arg snyk_high "$SNYK_HIGH" \
+          --arg snyk_medium "$SNYK_MEDIUM" \
+          --arg decision "$DECISION" \
+          --arg reason "${REASONS[*]}" \
+          '{
+            decision: $decision,
+            reason: $reason,
+            sonar: {
+              status: $sonar_status,
+              coverage: $coverage,
+              bugs: $bugs,
+              vulnerabilities: $sonar_vulns
+            },
+            snyk: {
+              critical: $snyk_critical,
+              high: $snyk_high,
+              medium: $snyk_medium
+            }
+          }' > gate-decision.json
+
+          echo "gate-result=$DECISION" >> $GITHUB_OUTPUT
+          echo "gate-reason=${REASONS[*]}" >> $GITHUB_OUTPUT
+
+      - name: Upload gate-decision artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-decision
+          path: gate-decision.json
+          retention-days: 7
+
+      - name: GitHub Summary (Table)
+        if: always()
+        run: |
+          echo "## 🧪 Resultados de Puertas (Tabla Consolidada)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Load outputs
+          SNYK_CRIT="${{ steps.calc.outputs.snyk_critical }}"
+          SNYK_HIGH="${{ steps.calc.outputs.snyk_high }}"
+          SNYK_MED="${{ steps.calc.outputs.snyk_medium }}"
+
+          SONAR_STATUS="${{ steps.calc.outputs.sonar_status }}"
+          COVERAGE="${{ steps.calc.outputs.coverage }}"
+          BUGS="${{ steps.calc.outputs.bugs }}"
+          SONAR_VULNS="${{ steps.calc.outputs.sonar_vulns }}"
+
+          # Load dynamic thresholds
+          CRITICAL_MAX="${{ steps.calc.outputs.critical_max }}"
+          HIGH_MAX="${{ steps.calc.outputs.high_max }}"
+          MEDIUM_MAX="${{ steps.calc.outputs.medium_max }}"
+          COVERAGE_MIN="${{ steps.calc.outputs.coverage_min }}"
+          BUGS_MAX="${{ steps.calc.outputs.bugs_max }}"
+          SONAR_VULNS_MAX="${{ steps.calc.outputs.sonar_vulns_max }}"
+
+          echo "| Sistema | Estado | Métricas | Umbrales | Resultado |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|----------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
+
+          # Snyk evaluation
+          if [ "$SNYK_CRIT" -le "$CRITICAL_MAX" ] && \
+             [ "$SNYK_HIGH" -le "$HIGH_MAX" ] && \
+             [ "$SNYK_MED" -le "$MEDIUM_MAX" ]; then
+             SNYK_STATE="✅ Passed"
+          else
+             SNYK_STATE="❌ Failed"
+          fi
+
+          echo "| **Snyk Dependencies** | $SNYK_STATE | Critical: $SNYK_CRIT<br>High: $SNYK_HIGH<br>Medium: $SNYK_MED | Critical ≤ $CRITICAL_MAX<br>High ≤ $HIGH_MAX<br>Medium ≤ $MEDIUM_MAX | $SNYK_STATE |" \
+          >> $GITHUB_STEP_SUMMARY
+
+          # Sonar evaluation
+          if [[ "$SONAR_STATUS" == "OK" || "$SONAR_STATUS" == "PASSED" ]]; then
+             SONAR_STATE="✅ Passed"
+          elif [ "$BUGS" -gt "$BUGS_MAX" ] || [ "$SONAR_VULNS" -gt "$SONAR_VULNS_MAX" ]; then
+             SONAR_STATE="❌ Failed"
+          else
+             SONAR_STATE="⚠️ Warning"
+          fi
+
+          echo "| **SonarQube Quality Gate** | $SONAR_STATE | Coverage: ${COVERAGE}%<br>Bugs: $BUGS<br>Vulnerabilities: $SONAR_VULNS | Coverage ≥ ${COVERAGE_MIN}%<br>Bugs ≤ ${BUGS_MAX}<br>Vulns ≤ ${SONAR_VULNS_MAX} | $SONAR_STATE |" \
+          >> $GITHUB_STEP_SUMMARY

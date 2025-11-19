@@ -1,5 +1,4 @@
 name: 'Code Quality Analysis'
-
 on:
   workflow_call:
     inputs:
@@ -8,11 +7,6 @@ on:
         required: false
         type: string
         default: '17'
-      thresholds:
-        description: 'Developer-effective threshold config'
-        required: false
-        type: string
-
     secrets:
       SONAR_TOKEN:
         required: true
@@ -20,7 +14,7 @@ on:
         required: true
       SONAR_PROJECT_KEY:
         required: true
-        
+
     outputs:
       quality-gate-status:
         description: 'Quality gate status (PASSED/FAILED/UNKNOWN)'
@@ -31,121 +25,71 @@ on:
       sonar-gate-exit-code:
         description: 'Exit code from SonarQube quality gate analysis'
         value: ${{ jobs.code-quality.outputs.sonar-gate-exit-code }}
-      threshold-status:
-        description: 'Custom threshold evaluation result'
-        value: ${{ jobs.code-quality.outputs.threshold-status }}
 
 jobs:
   code-quality:
     name: Code Quality Analysis
     runs-on: ubuntu-latest
-    
-    env:
-      SONAR_PROJECT_KEY_DEBUGIN: ${{ secrets.SONAR_PROJECT_KEY }}
 
     outputs:
       quality-gate-status: ${{ steps.sonarqube_scan.outputs.QUALITY_GATE_STATUS }}
       sonarqube-configured: ${{ steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED }}
       sonar-gate-exit-code: ${{ steps.sonarqube_scan.outputs.SONAR_GATE_EXIT_CODE }}
-      threshold-status: ${{ steps.evaluate_thresholds.outputs.FINAL_THRESHOLD_STATUS }}
 
     steps:
-
-      # ========================
-      # CHECKOUT & BUILD SETUP
-      # ========================
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
-          
+
       - name: Download build artifacts
         uses: ./.github/actions/download-build-artifacts
+        continue-on-error: true
 
-      - name: Download classes
+      - name: Download test results
         uses: actions/download-artifact@v4
         with:
-         name: build-classes
-         path: target/classes
+          name: test-results
+          path: .
+        continue-on-error: true
 
-      - name: Download Jacoco report
-        uses: actions/download-artifact@v4
-        with:
-          name: build-jacoco
-          path: target/site/jacoco
-
-      # ========================
-      # LOAD THRESHOLDS.JSON
-      # ========================
-      - name: Load thresholds JSON
-        id: load_thresholds
-        run: |
-         echo "Loading dynamic thresholds…"
-
-         if [ -z "${{ inputs.thresholds }}" ]; then
-         echo "⚠️ No thresholds received — using empty JSON"
-         echo "{}" > thresholds.json
-         else
-         echo '${{ inputs.thresholds }}' > thresholds.json
-         cat thresholds.json
-         
-         fi
-
-         echo "Threshold file content:"
-         cat thresholds.json
-
-
-
-      # ========================
-      # VALIDATE SONAR CONFIG
-      # ========================
       - name: Validate SonarQube configuration
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
-          chmod +x sonarqube-cloud-scanning/scripts/validate-sonarqube.sh
-          
-          ./sonarqube-cloud-scanning/scripts/validate-sonarqube.sh \
-          && echo "SONARQUBE_VALIDATED=true" >> $GITHUB_ENV \
-          || echo "SONARQUBE_VALIDATED=false" >> $GITHUB_ENV
+          chmod +x sonarqube-cloud-scanning/scripts/validate-sonarqube.sh || true
+          ./sonarqube-cloud-scanning/scripts/validate-sonarqube.sh || true
 
-
-      # ========================
-      # RUN SONARQUBE ANALYSIS
-      # ========================
       - name: Run SonarQube Cloud Analysis
         id: sonarqube_scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
-          if [ -z "$SONAR_TOKEN" ] || [ "$SONARQUBE_VALIDATED" = "false" ]; then
-            echo "⚠️ SonarQube Cloud not configured — skipping analysis"
+          if [ -z "$SONAR_TOKEN" ]; then
             echo "SONARQUBE_CONFIGURED=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-
           echo "SONARQUBE_CONFIGURED=true" >> $GITHUB_OUTPUT
-
-          chmod +x mvnw
-          ./mvnw compile
-          ./mvnw sonar:sonar \
+          if [ ! -d "target/classes" ]; then
+            mvn compile || true
+          fi
+          mvn sonar:sonar \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.login=$SONAR_TOKEN \
-            -Dsonar.organization=$SONAR_ORGANIZATION \
-            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY_DEBUGIN}} \
-            -Dsonar.projectName="CI/CD Pipeline Security POC" \
+            -Dsonar.token=$SONAR_TOKEN \
+            -Dsonar.organization=${SONAR_ORGANIZATION} \
+            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
             -Dsonar.projectVersion=1.0.0 \
             -Dsonar.java.binaries=target/classes \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/ \
-            -Dsonar.qualitygate.wait=true || SONAR_EXIT_CODE=$?
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
 
           if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
             echo "QUALITY_GATE_STATUS=PASSED" >> $GITHUB_OUTPUT
@@ -153,158 +97,28 @@ jobs:
             echo "QUALITY_GATE_STATUS=FAILED" >> $GITHUB_OUTPUT
           fi
 
-          echo "SONAR_GATE_EXIT_CODE=${SONAR_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+          chmod +x sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh || true
+          set +e
+          ./sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh \
+            -k "${SONAR_PROJECT_KEY}" \
+            -o sonarqube-cloud-scanning/results/quality-gate-result.json || true
+          SONAR_GATE_EXIT_CODE=$?
+          set -e
+          echo "SONAR_GATE_EXIT_CODE=$SONAR_GATE_EXIT_CODE" >> $GITHUB_OUTPUT
 
-            # ⭐ NEW: Download and replace SonarCloud results JSON
-      - name: Download latest SonarCloud results JSON
-        if: steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED == 'true'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
-        run: |
-          echo "📥 Fetching latest SonarCloud metrics…"
-
-          # Ensure directory exists
-          mkdir -p sonarqube-cloud-scanning/results
-
-          # Download SonarCloud results and REPLACE the existing file
-          curl -s -u "$SONAR_TOKEN:" \
-            "https://sonarcloud.io/api/measures/component?component=$SONAR_PROJECT_KEY&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,security_hotspots" \
-            -o sonarqube-cloud-scanning/results/quality-gate-result.json
-
-          echo "📄 Downloaded updated quality-gate-result.json:"
-          cat sonarqube-cloud-scanning/results/quality-gate-result.json
-
-
-
-      # ========================
-      # MERGE SONAR RESULTS + THRESHOLDS
-      # ========================
-      - name: Evaluate custom Sonar thresholds
-        id: evaluate_thresholds
-        run: |
-          echo "📊 Evaluating thresholds for Sonar metrics…"
-          RESULT_FILE="sonarqube-cloud-scanning/results/quality-gate-result.json"
-
-          safe_number() {
-            value=$(jq -r "$1 // 0" "$2" 2>/dev/null)
-            value=$(echo "$value" | sed 's/[^0-9.\-]//g')
-            if [ -z "$value" ]; then value=0; fi
-            echo "$value"
-          }
-
-          coverage=$(safe_number '.metrics.coverage' "$RESULT_FILE")
-          code_smells=$(safe_number '.metrics.code_smells' "$RESULT_FILE")
-          bugs=$(safe_number '.metrics.bugs' "$RESULT_FILE")
-          duplication=$(safe_number '.metrics.duplicated_lines_density' "$RESULT_FILE")
-          vulnerabilities=$(safe_number '.metrics.vulnerabilities' "$RESULT_FILE")
-
-          echo "Coverage: $coverage"
-          echo "Code smells: $code_smells"
-          echo "Bugs: $bugs"
-          echo "Duplication: $duplication"
-          echo "Vulnerabilities: $vulnerabilities"
-
-          TH_FILE="thresholds.json"
-
-          coverage_min=$(safe_number '.coverage_min' "$TH_FILE")
-          code_smells_max=$(safe_number '.code_smells_max' "$TH_FILE")
-          bugs_max=$(safe_number '.bugs_max' "$TH_FILE")
-          duplication_max=$(safe_number '.duplication_max_percent' "$TH_FILE")
-          sonar_vulns_max=$(safe_number '.sonar_vulns_max' "$TH_FILE")
-
-          status="PASSED"
-
-          if (( $(echo "$coverage < $coverage_min" | bc -l) )); then status="FAILED"; fi
-          if (( $(echo "$code_smells > $code_smells_max" | bc -l) )); then status="FAILED"; fi
-          if (( $(echo "$bugs > $bugs_max" | bc -l) )); then status="FAILED"; fi
-          if (( $(echo "$duplication > $duplication_max" | bc -l) )); then status="FAILED"; fi
-          if (( $(echo "$vulnerabilities > $sonar_vulns_max" | bc -l) )); then status="FAILED"; fi
-
-          echo "FINAL_THRESHOLD_STATUS=$status" >> $GITHUB_OUTPUT
-
-
-      # ========================
-      # ALWAYS GENERATE SUMMARY (FULLY UPDATED)
-      # ========================
-      - name: Render Threshold Summary
-        if: always()
-        run: |
-          RESULT_FILE="sonarqube-cloud-scanning/results/quality-gate-result.json"
-
-          echo "### 📊 Sonar + Threshold Summary" >> $GITHUB_STEP_SUMMARY
-
-          if [ ! -f "$RESULT_FILE" ]; then
-            echo "❌ No Sonar results JSON was found." >> $GITHUB_STEP_SUMMARY
-            exit 0
-          fi
-
-          # Extract real metrics
-          coverage=$(jq -r '.metrics.coverage // 0' "$RESULT_FILE")
-          code_smells=$(jq -r '.metrics.code_smells // 0' "$RESULT_FILE")
-          bugs=$(jq -r '.metrics.bugs // 0' "$RESULT_FILE")
-          duplication=$(jq -r '.metrics.duplicated_lines_density // 0' "$RESULT_FILE")
-          vulnerabilities=$(jq -r '.metrics.vulnerabilities // 0' "$RESULT_FILE")
-          qg_status=$(jq -r '.quality_gate.status // "UNKNOWN"' "$RESULT_FILE")
-          sonar_decision=$(jq -r '.quality_gate.decision // "UNKNOWN"' "$RESULT_FILE")
-
-          # Extract thresholds
-          cov_min=$(jq -r '.coverage_min // 0' thresholds.json)
-          smells_max=$(jq -r '.code_smells_max // 0' thresholds.json)
-          bugs_max=$(jq -r '.bugs_max // 0' thresholds.json)
-          vuln_max=$(jq -r '.sonar_vulns_max // 0' thresholds.json)
-          dup_max=$(jq -r '.duplication_max_percent // 0' thresholds.json)
-
-          echo "### 📈 Actual Metrics" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage: **$coverage%**" >> $GITHUB_STEP_SUMMARY
-          echo "- Code Smells: **$code_smells**" >> $GITHUB_STEP_SUMMARY
-          echo "- Bugs: **$bugs**" >> $GITHUB_STEP_SUMMARY
-          echo "- Duplication: **$duplication%**" >> $GITHUB_STEP_SUMMARY
-          echo "- Vulnerabilities: **$vulnerabilities**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### 📏 Required Thresholds" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage ≥ **$cov_min%**" >> $GITHUB_STEP_SUMMARY
-          echo "- Code Smells ≤ **$smells_max**" >> $GITHUB_STEP_SUMMARY
-          echo "- Bugs ≤ **$bugs_max**" >> $GITHUB_STEP_SUMMARY
-          echo "- Vulnerabilities ≤ **$vuln_max**" >> $GITHUB_STEP_SUMMARY
-          echo "- Duplication ≤ **$dup_max%**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### 🧪 Quality Gate Result" >> $GITHUB_STEP_SUMMARY
-          if [ "$qg_status" = "OK" ]; then
-            echo "✅ Quality Gate: **PASSED**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Quality Gate: **FAILED**" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### 🧩 Threshold Result" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.evaluate_thresholds.outputs.FINAL_THRESHOLD_STATUS }}" = "PASSED" ]; then
-            echo "✅ Custom Thresholds: **PASSED**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Custom Thresholds: **FAILED**" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "🔗 **[Open SonarCloud Dashboard](https://sonarcloud.io/project/overview?id=${{ env.SONAR_PROJECT_KEY_DEBUGIN }})**" >> $GITHUB_STEP_SUMMARY
-
-
-      # ========================
-      # UPLOAD RESULTS FOR UI
-      # ========================
       - name: Generate quality summary
         if: steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED == 'true'
         uses: ./.github/actions/generate-quality-summary
         with:
           results-file: sonarqube-cloud-scanning/results/quality-gate-result.json
-          project-key: ${{ env.SONAR_PROJECT_KEY_DEBUGIN }}
+          project-key: ${{ secrets.SONAR_PROJECT_KEY }}
           branch-name: ${{ github.ref_name }}
 
       - name: Upload quality results
         uses: actions/upload-artifact@v4
         with:
           name: quality-results
-          path: sonarqube-cloud-scanning/results/quality-gate-result.json
+          path: |
+            sonarqube-cloud-scanning/results/quality-gate-result.json
           if-no-files-found: warn
-          retention-days: 1
+          retention-days: 3

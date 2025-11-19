@@ -19,9 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ===========================
-      # DEFAULT THRESHOLDS (FULL)
-      # ===========================
       - name: Define default thresholds
         id: defaults
         run: |
@@ -31,20 +28,21 @@ jobs:
             "high_vulns_max": 0,
             "medium_vulns_max": 10,
             "low_vulns_max": 999,
-
             "test_pass_rate_min": 80,
-
             "coverage_min": 80,
             "code_smells_max": 100,
             "bugs_max": 0,
             "sonar_vulns_max": 0,
-            "duplication_max_percent": 5
+            "duplication_max_percent": 5,
+            "gate_modes": {
+              "sonar_quality": "ENFORCING",
+              "snyk_critical": "ENFORCING",
+              "snyk_high": "NON_ENFORCING",
+              "code_smells": "NON_ENFORCING"
+            }
           }
           EOF
 
-      # ===========================
-      # CHECK IF thresholds.json EXISTS
-      # ===========================
       - name: Load developer thresholds (if present)
         id: load_dev
         run: |
@@ -57,22 +55,15 @@ jobs:
             echo "file_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # ===========================
-      # FIX JSON ONLY IF thresholds.json EXISTS
-      # ===========================
       - name: Fix invalid thresholds JSON (auto-quote keys)
         if: steps.load_dev.outputs.file_exists == 'true'
         run: |
           echo "🛠 Normalizando thresholds.json..."
-          sed -E 's/([A-Za-z0-9_]+):/"\1":/g' thresholds.json > fixed.json
+          sed -E 's/([A-Za-z0-9_]+):/"\1":/g' thresholds.json > fixed.json || cp thresholds.json fixed.json
           mv fixed.json thresholds.json
-
           echo "Developer JSON corregido:"
           cat thresholds.json
 
-      # ===========================
-      # MERGE: DEFAULTS + FIXED DEV OVERRIDES
-      # ===========================
       - name: Combine default + developer thresholds
         id: combine
         run: |
@@ -86,8 +77,8 @@ jobs:
 
           echo "$merged" > merged-raw.json
 
-          # 🔥 FIX FINAL: normalize merged JSON (quote keys)
-          sed -E 's/([A-Za-z0-9_]+):/"\1":/g' merged-raw.json > final-thresholds.json
+          # ensure final valid JSON
+          cat merged-raw.json | jq '.' > final-thresholds.json
 
           echo "Final merged JSON (validado):"
           cat final-thresholds.json
@@ -98,11 +89,8 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      # ===========================
-      # ARTIFACT OUTPUT
-      # ===========================
-#      - name: Upload normalized thresholds
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: effective-thresholds
-#          path: final-thresholds.json
+      - name: Save overrides as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: developer-overrides
+          path: final-thresholds.json

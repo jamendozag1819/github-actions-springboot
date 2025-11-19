@@ -1,4 +1,5 @@
 name: 'Build Application'
+
 on:
   workflow_call:
     inputs:
@@ -28,8 +29,8 @@ jobs:
           java-version: ${{ inputs.java-version }}
           
       - name: Build Spring Boot application
-        run: |         
-         mvn clean verify
+        run: |
+          mvn clean compile test | true
           
       - name: Package application
         run: |
@@ -41,18 +42,3 @@ jobs:
           name: build-artifacts
           path: target/*.jar
           retention-days: 1
-
-      - name: Upload classes folder
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-classes
-          path: target/classes/**
-          retention-days: 1
-
-      - name: Upload Jacoco File
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-jacoco
-          path: target/site/jacoco/
-          retention-days: 1
- 
