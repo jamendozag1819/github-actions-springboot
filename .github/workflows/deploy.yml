@@ -22,10 +22,6 @@ on:
 env:
   JAVA_VERSION: '17'
   MAVEN_VERSION: '3.8.6'
-  DOCKER_BUILDKIT: 1
-  PDP_URL: http://localhost:7766
-  REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
-  REGISTRY_REPOSITORY: "dev-pipeline-docker-docker"
 
 jobs:
   build:
