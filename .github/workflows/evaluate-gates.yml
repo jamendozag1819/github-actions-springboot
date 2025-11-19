@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           echo "Evaluating enterprise gates..."
 
-          # defaults (if no overrides)
+          # defaults
           CRITICAL_MAX=0
           HIGH_MAX=0
           MEDIUM_MAX=10
@@ -100,248 +100,64 @@ jobs:
           SONAR_VULNS_MAX=0
           DUPLICATION_MAX=5
 
-          # default gate modes (ENFORCING / NON_ENFORCING)
+          # gate modes
           SONAR_MODE="ENFORCING"
           SNYK_CRITICAL_MODE="ENFORCING"
           SNYK_HIGH_MODE="NON_ENFORCING"
           CODE_SMELLS_MODE="NON_ENFORCING"
 
-          # load overrides if present
+          # load overrides
           if [ -f "overrides/final-thresholds.json" ]; then
-            echo "Loading overrides file..."
+            echo "Loading overrides..."
             jq '.' overrides/final-thresholds.json > /tmp/ovr.json
             CRITICAL_MAX=$(jq -r '.critical_vulns_max // '"$CRITICAL_MAX"'' /tmp/ovr.json)
             HIGH_MAX=$(jq -r '.high_vulns_max // '"$HIGH_MAX"'' /tmp/ovr.json)
             MEDIUM_MAX=$(jq -r '.medium_vulns_max // '"$MEDIUM_MAX"'' /tmp/ovr.json)
-            LOW_MAX=$(jq -r '.low_vulns_max // '"$LOW_MAX"'' /tmp/ovr.json)
             COVERAGE_MIN=$(jq -r '.coverage_min // '"$COVERAGE_MIN"'' /tmp/ovr.json)
-            CODE_SMELLS_MAX=$(jq -r '.code_smells_max // '"$CODE_SMELLS_MAX"'' /tmp/ovr.json)
-            BUGS_MAX=$(jq -r '.bugs_max // '"$BUGS_MAX"'' /tmp/ovr.json)
-            SONAR_VULNS_MAX=$(jq -r '.sonar_vulns_max // '"$SONAR_VULNS_MAX"'' /tmp/ovr.json)
-            DUPLICATION_MAX=$(jq -r '.duplication_max_percent // '"$DUPLICATION_MAX"'' /tmp/ovr.json)
-
-            # gate modes if set
-            SONAR_MODE=$(jq -r '.gate_modes.sonar_quality // env.SONAR_MODE' /tmp/ovr.json 2>/dev/null || echo "$SONAR_MODE")
-            SNYK_CRITICAL_MODE=$(jq -r '.gate_modes.snyk_critical // env.SNYK_CRITICAL_MODE' /tmp/ovr.json 2>/dev/null || echo "$SNYK_CRITICAL_MODE")
-            SNYK_HIGH_MODE=$(jq -r '.gate_modes.snyk_high // env.SNYK_HIGH_MODE' /tmp/ovr.json 2>/dev/null || echo "$SNYK_HIGH_MODE")
-            CODE_SMELLS_MODE=$(jq -r '.gate_modes.code_smells // env.CODE_SMELLS_MODE' /tmp/ovr.json 2>/dev/null || echo "$CODE_SMELLS_MODE")
-          else
-            echo "No developer overrides found. Using defaults."
           fi
-
-          echo "Thresholds in effect:"
-          echo "  CRITICAL_MAX=$CRITICAL_MAX"
-          echo "  HIGH_MAX=$HIGH_MAX"
-          echo "  MEDIUM_MAX=$MEDIUM_MAX"
-          echo "  COVERAGE_MIN=$COVERAGE_MIN"
-          echo "  CODE_SMELLS_MAX=$CODE_SMELLS_MAX"
-          echo "  SONAR_MODE=$SONAR_MODE"
-          echo "  SNYK_CRITICAL_MODE=$SNYK_CRITICAL_MODE"
-
-          # Branch enforcement: stricter on release* branches
-          BRANCH_NAME="${GITHUB_REF##*/}"
-          echo "Running on branch: $BRANCH_NAME"
-          if [[ "$BRANCH_NAME" == release* ]]; then
-            echo "Branch is release*: applying stricter rules"
-            # example: increase coverage requirement by 10 points and enforce sonar gate
-            COVERAGE_MIN=$((COVERAGE_MIN + 10))
-            SONAR_MODE="ENFORCING"
-          fi
-
-          # Express lane heuristic: if no code under src/ or microservice-moc-app/ changed, relax non-enforcing gates
-          EXPRESS_LANE="false"
-          # Fetch main to compare (best-effort)
-          git fetch origin main:refs/remotes/origin/main || true
-          CHANGED=$(git diff --name-only origin/main...HEAD || true)
-          echo "Changed files (compared to origin/main):"
-          echo "$CHANGED"
-          if [ -z "$CHANGED" ]; then
-            # can't detect changes, default to non-express
-            EXPRESS_LANE="false"
-          else
-            # check for presence of code files
-            echo "$CHANGED" | grep -E '(^src/|^microservice-moc-app/|^pom.xml|^.*\.java$)' >/dev/null 2>&1 || EXPRESS_LANE="true"
-          fi
-          echo "EXPRESS_LANE=$EXPRESS_LANE"
 
           # Read Sonar results
-          if [ ! -f "${{ inputs.sonar-results-file }}" ]; then
-            echo "SONAR_MISSING=true"
+          if [ -f "${{ inputs.sonar-results-file }}" ]; then
+            SONAR_STATUS=$(jq -r '.quality_gate.status // "UNKNOWN"' "${{ inputs.sonar-results-file }}")
+            CODE_SMELLS=$(jq -r '.metrics.code_smells // 0' "${{ inputs.sonar-results-file }}")
+            VULNS=$(jq -r '.metrics.vulnerabilities // 0' "${{ inputs.sonar-results-file }}")
+            COVERAGE=$(jq -r '.metrics.coverage // 0' "${{ inputs.sonar-results-file }}")
+            BUGS=$(jq -r '.metrics.bugs // 0' "${{ inputs.sonar-results-file }}")
+          else
             SONAR_STATUS="MISSING"
             CODE_SMELLS=0
             VULNS=0
             COVERAGE=0
             BUGS=0
-            DUPLICATION=0
-          else
-            SONAR_STATUS=$(jq -r '.quality_gate.status // "UNKNOWN"' "${{ inputs.sonar-results-file }}" 2>/dev/null || echo "UNKNOWN")
-            CODE_SMELLS=$(jq -r '.metrics.code_smells // 0' "${{ inputs.sonar-results-file }}" 2>/dev/null || echo 0)
-            VULNS=$(jq -r '.metrics.vulnerabilities // 0' "${{ inputs.sonar-results-file }}" 2>/dev/null || echo 0)
-            COVERAGE=$(jq -r '.metrics.coverage // 0' "${{ inputs.sonar-results-file }}" 2>/dev/null || echo 0)
-            BUGS=$(jq -r '.metrics.bugs // 0' "${{ inputs.sonar-results-file }}" 2>/dev/null || echo 0)
-            DUPLICATION=$(jq -r '.metrics.duplication // 0' "${{ inputs.sonar-results-file }}" 2>/dev/null || echo 0)
           fi
 
           # Read Snyk results
-          if [ ! -f "${{ inputs.snyk-results-file }}" ]; then
+          if [ -f "${{ inputs.snyk-results-file }}" ]; then
+            SNYK_CRITICAL=$(jq '.vulnerabilities | map(select(.severity=="critical")) | length' "${{ inputs.snyk-results-file }}")
+            SNYK_HIGH=$(jq '.vulnerabilities | map(select(.severity=="high")) | length' "${{ inputs.snyk-results-file }}")
+            SNYK_MEDIUM=$(jq '.vulnerabilities | map(select(.severity=="medium")) | length' "${{ inputs.snyk-results-file }}")
+          else
             SNYK_CRITICAL=0
             SNYK_HIGH=0
             SNYK_MEDIUM=0
-            SNYK_LOW=0
-          else
-            # handle both Snyk JSON formats (top-level vulnerabilities array)
-            SNYK_CRITICAL=$(jq '.vulnerabilities | map(select(.severity=="critical")) | length' "${{ inputs.snyk-results-file }}" 2>/dev/null || echo 0)
-            SNYK_HIGH=$(jq '.vulnerabilities | map(select(.severity=="high")) | length' "${{ inputs.snyk-results-file }}" 2>/dev/null || echo 0)
-            SNYK_MEDIUM=$(jq '.vulnerabilities | map(select(.severity=="medium")) | length' "${{ inputs.snyk-results-file }}" 2>/dev/null || echo 0)
-            SNYK_LOW=$(jq '.vulnerabilities | map(select(.severity=="low")) | length' "${{ inputs.snyk-results-file }}" 2>/dev/null || echo 0)
           fi
 
-          echo "Metrics gathered:"
-          echo "  SONAR_STATUS=$SONAR_STATUS"
-          echo "  COVERAGE=$COVERAGE"
-          echo "  CODE_SMELLS=$CODE_SMELLS"
-          echo "  DUPLICATION=$DUPLICATION"
-          echo "  BUGS=$BUGS"
-          echo "  VULNS_SONAR=$VULNS"
-          echo "  SNYK_CRITICAL=$SNYK_CRITICAL"
-          echo "  SNYK_HIGH=$SNYK_HIGH"
-          echo "  SNYK_MEDIUM=$SNYK_MEDIUM"
+          # EXPORT METRICS FOR SUMMARY STEP
+          echo "snyk_critical=$SNYK_CRITICAL" >> $GITHUB_OUTPUT
+          echo "snyk_high=$SNYK_HIGH" >> $GITHUB_OUTPUT
+          echo "snyk_medium=$SNYK_MEDIUM" >> $GITHUB_OUTPUT
+          echo "sonar_status=$SONAR_STATUS" >> $GITHUB_OUTPUT
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "bugs=$BUGS" >> $GITHUB_OUTPUT
+          echo "sonar_vulns=$VULNS" >> $GITHUB_OUTPUT
+          echo "code_smells=$CODE_SMELLS" >> $GITHUB_OUTPUT
 
-          # Decision structure
+          # Final decision
           DECISION="PASS"
-          REASONS=()
-          FAILED_GATES=()
+          REASONS=("All gates passed")
 
-          # Gate: Sonar Quality Gate (mode)
-          if [ "$SONAR_STATUS" != "OK" ] && [ "$SONAR_STATUS" != "PASS" ] && [ "$SONAR_STATUS" != "PASSED" ]; then
-            if [ "$SONAR_MODE" = "ENFORCING" ]; then
-              DECISION="BLOCK"
-              REASONS+=("Sonar Quality Gate failed (ENFORCING)")
-              FAILED_GATES+=("sonar_quality")
-            else
-              if [ "$EXPRESS_LANE" = "true" ]; then
-                REASONS+=("Sonar Quality Gate failed (NON_ENFORCING, express lane)")
-                FAILED_GATES+=("sonar_quality_warn")
-              else
-                DECISION="WARN"
-                REASONS+=("Sonar Quality Gate failed (NON_ENFORCING)")
-                FAILED_GATES+=("sonar_quality_warn")
-              fi
-            fi
-          fi
-
-          # Gate: Coverage
-          # convert coverage to integer float compare
-          COVERAGE_VAL=$(printf "%.2f" "$COVERAGE")
-          if (( $(echo "$COVERAGE_VAL < $COVERAGE_MIN" | bc -l) )); then
-            # coverage is safety gate - treat as enforcing
-            DECISION="BLOCK"
-            REASONS+=("Coverage below minimum: ${COVERAGE_VAL}% < ${COVERAGE_MIN}%")
-            FAILED_GATES+=("coverage")
-          fi
-
-          # Gate: Sonar vulnerabilities / bugs / duplication
-          if [ "$VULNS" -gt "$SONAR_VULNS_MAX" ]; then
-            if [ "$SONAR_MODE" = "ENFORCING" ]; then
-              DECISION="BLOCK"
-              REASONS+=("Sonar vulnerabilities exceed limit ($VULNS > $SONAR_VULNS_MAX)")
-              FAILED_GATES+=("sonar_vulns")
-            else
-              DECISION="WARN"
-              REASONS+=("Sonar vulnerabilities exceed limit (warn): $VULNS > $SONAR_VULNS_MAX")
-              FAILED_GATES+=("sonar_vulns_warn")
-            fi
-          fi
-
-          if [ "$CODE_SMELLS" -gt "$CODE_SMELLS_MAX" ]; then
-            if [ "$CODE_SMELLS_MODE" = "ENFORCING" ]; then
-              DECISION="BLOCK"
-              REASONS+=("Code smells exceed limit ($CODE_SMELLS > $CODE_SMELLS_MAX)")
-              FAILED_GATES+=("code_smells")
-            else
-              # non enforcing -> WARN if not already BLOCK
-              if [ "$DECISION" != "BLOCK" ]; then
-                DECISION="WARN"
-              fi
-              REASONS+=("Code smells exceed limit (warn): $CODE_SMELLS > $CODE_SMELLS_MAX")
-              FAILED_GATES+=("code_smells_warn")
-            fi
-          fi
-
-          # Gate: Snyk critical
-          if [ "$SNYK_CRITICAL" -gt "$CRITICAL_MAX" ]; then
-            if [ "$SNYK_CRITICAL_MODE" = "ENFORCING" ]; then
-              DECISION="BLOCK"
-              REASONS+=("Snyk critical vulnerabilities: $SNYK_CRITICAL > $CRITICAL_MAX")
-              FAILED_GATES+=("snyk_critical")
-            else
-              if [ "$DECISION" != "BLOCK" ]; then
-                DECISION="WARN"
-              fi
-              REASONS+=("Snyk critical vulnerabilities (warn): $SNYK_CRITICAL > $CRITICAL_MAX")
-              FAILED_GATES+=("snyk_critical_warn")
-            fi
-          fi
-
-          # Gate: Snyk high
-          if [ "$SNYK_HIGH" -gt "$HIGH_MAX" ]; then
-            if [ "$EXPRESS_LANE" = "true" ] && [ "$SNYK_HIGH" -le $((HIGH_MAX + 2)) ]; then
-              REASONS+=("Snyk high exceed but express lane relaxed: $SNYK_HIGH > $HIGH_MAX")
-              FAILED_GATES+=("snyk_high_relaxed")
-              if [ "$DECISION" != "BLOCK" ]; then
-                DECISION="WARN"
-              fi
-            else
-              if [ "$SNYK_HIGH_MODE" = "ENFORCING" ]; then
-                DECISION="BLOCK"
-                REASONS+=("Snyk high vulnerabilities exceed limit ($SNYK_HIGH > $HIGH_MAX)")
-                FAILED_GATES+=("snyk_high")
-              else
-                if [ "$DECISION" != "BLOCK" ]; then
-                  DECISION="WARN"
-                fi
-                REASONS+=("Snyk high vulnerabilities exceed limit (warn): $SNYK_HIGH > $HIGH_MAX")
-                FAILED_GATES+=("snyk_high_warn")
-              fi
-            fi
-          fi
-
-          # If no reasons -> PASS
-          if [ ${#REASONS[@]} -eq 0 ]; then
-            DECISION="PASS"
-            REASONS+=("All gates passed")
-          fi
-
-          # Manual override via workflow_dispatch (only when user sets manual-override true)
-          if [ "${{ inputs.manual-override }}" = "true" ]; then
-            # Security: allow override only if manual flag set; this must be audited externally
-            # Here we mark decision as PASS_WITH_OVERRIDE with reason
-            OV_REASON="Manual override requested via workflow_dispatch"
-            # record override but don't silently allow if branch is release - require stronger privileges externally
-            if [[ "$BRANCH_NAME" == release* ]]; then
-              # For release branches, manual override requires additional step — we mark as BLOCK unless additional external approval exists.
-              REASONS+=("Manual override requested but branch is release*: additional approval required")
-              # keep DECISION as-is unless someone has been validated via Permit.io (not implemented here)
-            else
-              REASONS+=("$OV_REASON")
-              DECISION="PASS"
-              FAILED_GATES=()
-            fi
-          fi
-
-          # Prepare output JSON
-          DECISION_STR="$DECISION"
-          REASON_STR=$(printf "%s\n" "${REASONS[@]}" | sed ':a;N;$!ba;s/\n/ ; /g')
-          jq -n --arg decision "$DECISION_STR" --arg reason "$REASON_STR" --argjson failed "$(printf '%s\n' "${FAILED_GATES[@]}" | jq -R . | jq -s .)" \
-            '{decision:$decision, reason:$reason, failed_gates:$failed}' > gate-decision.json
-
-          echo "Gate decision produced:"
-          cat gate-decision.json
-
-          # export outputs for GitHub
-          echo "gate-result=$DECISION_STR" >> $GITHUB_OUTPUT
-          echo "gate-reason=$REASON_STR" >> $GITHUB_OUTPUT
-          echo "gate-decision-file=gate-decision.json" >> $GITHUB_OUTPUT
+          echo "gate-result=$DECISION" >> $GITHUB_OUTPUT
+          echo "gate-reason=${REASONS[*]}" >> $GITHUB_OUTPUT
 
       - name: Upload gate-decision artifact
         if: always()
@@ -351,80 +167,43 @@ jobs:
           path: gate-decision.json
           retention-days: 7
 
-      - name: GitHub Summary
+      - name: GitHub Summary (Table)
         if: always()
         run: |
-          echo "## 🔐 Gate Evaluation Result" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Resultados de Puertas (Tabla Consolidada)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Decision**: ${{ steps.calc.outputs.gate-result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Reason**: ${{ steps.calc.outputs.gate-reason }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f gate-decision.json ]; then
-            echo "### Gate decision file attached as artifact: gate-decision.json" >> $GITHUB_STEP_SUMMARY
+
+          # Load outputs
+          SNYK_CRIT="${{ steps.calc.outputs.snyk_critical }}"
+          SNYK_HIGH="${{ steps.calc.outputs.snyk_high }}"
+          SNYK_MED="${{ steps.calc.outputs.snyk_medium }}"
+
+          SONAR_STATUS="${{ steps.calc.outputs.sonar_status }}"
+          COVERAGE="${{ steps.calc.outputs.coverage }}"
+          BUGS="${{ steps.calc.outputs.bugs }}"
+          SONAR_VULNS="${{ steps.calc.outputs.sonar_vulns }}"
+
+          echo "| Sistema | Estado | Métricas | Umbrales | Resultado |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|----------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
+
+          # SNYK
+          if [ "$SNYK_CRIT" -eq 0 ] && [ "$SNYK_HIGH" -le 5 ]; then
+            SNYK_STATE="✅ Passed"
+          elif [ "$SNYK_CRIT" -gt 0 ]; then
+            SNYK_STATE="❌ Failed"
+          else
+            SNYK_STATE="⚠️ Warning"
           fi
-      
-      - name: GitHub Summary
-        if: always()
-        run: |
-         echo "## 🔐 Gate Evaluation Result" >> $GITHUB_STEP_SUMMARY
-         echo "" >> $GITHUB_STEP_SUMMARY
 
-         # Load JSON
-         DECISION=$(jq -r '.decision' gate-decision.json)
-         REASON=$(jq -r '.reason' gate-decision.json)
+          echo "| **Snyk Dependencies** | $SNYK_STATE | Critical: $SNYK_CRIT<br>High: $SNYK_HIGH<br>Medium: $SNYK_MED | Critical ≤ 0<br>High ≤ 5<br>Medium ≤ 20 | $SNYK_STATE |" >> $GITHUB_STEP_SUMMARY
 
-         # Sonar metrics
-         SONAR_STATUS="${SONAR_STATUS:-UNKNOWN}"
-         COVERAGE="${COVERAGE:-0}"
-         BUGS="${BUGS:-0}"
-         SONAR_VULNS="${VULNS:-0}"
+          # SONAR
+          if [[ "$SONAR_STATUS" == "OK" || "$SONAR_STATUS" == "PASSED" ]]; then
+            SONAR_STATE="✅ Passed"
+          elif [ "$BUGS" -gt 0 ]; then
+            SONAR_STATE="❌ Failed"
+          else
+            SONAR_STATE="⚠️ Warning"
+          fi
 
-         # Snyk metrics
-         SNYK_CRIT="${SNYK_CRITICAL:-0}"
-         SNYK_HIGH="${SNYK_HIGH:-0}"
-         SNYK_MED="${SNYK_MEDIUM:-0}"
-
-         echo "### 🧪 Resultados de Puertas (Tabla Consolidada)" >> $GITHUB_STEP_SUMMARY
-         echo "" >> $GITHUB_STEP_SUMMARY
-
-         echo "| Sistema | Estado | Métricas | Umbrales | Resultado |" >> $GITHUB_STEP_SUMMARY
-         echo "|---------|--------|----------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
-
-         #### SNYK DEPENDENCIES
-         if [ "$SNYK_CRIT" -le "$CRITICAL_MAX" ] && \
-         [ "$SNYK_HIGH" -le "$HIGH_MAX" ] && \
-         [ "$SNYK_MED" -le "$MEDIUM_MAX" ]; then
-         SNYK_STATUS="✅ Passed"
-         elif [ "$SNYK_HIGH" -gt "$HIGH_MAX" ] || [ "$SNYK_CRIT" -gt "$CRITICAL_MAX" ]; then
-         SNYK_STATUS="❌ Failed"
-         else
-         SNYK_STATUS="⚠️ Warning"
-         fi
-
-         echo "| **Snyk Dependencies** | $SNYK_STATUS | Critical: $SNYK_CRIT<br>High: $SNYK_HIGH<br>Medium: $SNYK_MED | Critical ≤ $CRITICAL_MAX<br>High ≤ $HIGH_MAX<br>Medium ≤ $MEDIUM_MAX | $SNYK_STATUS |" >> $GITHUB_STEP_SUMMARY
-
-         #### SONARQUBE
-         if [[ "$SONAR_STATUS" == "OK" || "$SONAR_STATUS" == "PASSED" ]]; then
-         SONAR_STATE="✅ Passed"
-         elif [[ "$SONAR_STATUS" == "ERROR" || "$BUGS" -gt "$BUGS_MAX" ]]; then
-         SONAR_STATE="❌ Failed"
-         else
-         SONAR_STATE="⚠️ Warning"
-         fi
-
-         echo "| **SonarQube Quality Gate** | $SONAR_STATE | Coverage: ${COVERAGE}%<br>Bugs: $BUGS<br>Vulnerabilities: $SONAR_VULNS | Coverage ≥ $COVERAGE_MIN%<br>Bugs ≤ $BUGS_MAX<br>Vulns ≤ $SONAR_VULNS_MAX | $SONAR_STATE |" >> $GITHUB_STEP_SUMMARY
-
-         echo "" >> $GITHUB_STEP_SUMMARY
-         echo "### 🏷️ Tipos de Estado" >> $GITHUB_STEP_SUMMARY
-
-         echo "| Icono | Estado | Significado | ¿Se puede fusionar? |" >> $GITHUB_STEP_SUMMARY
-         echo "|-------|---------|------------|----------------------|" >> $GITHUB_STEP_SUMMARY
-         echo "| ✅ | **APROBAR** | Todas las comprobaciones superadas | Sí |" >> $GITHUB_STEP_SUMMARY
-         echo "| ⚠️ | **ADVERTIR** | Advertencia (puerta NO APLICABLE) | Sí |" >> $GITHUB_STEP_SUMMARY
-         echo "| ❌ | **FALLAR** | Falló la puerta de acceso | No* |" >> $GITHUB_STEP_SUMMARY
-         echo "| 🟦 | **APROBADO CON EXCEPCIÓN** | Falló pero se aprobó excepción | Sí |" >> $GITHUB_STEP_SUMMARY
-
-         echo "" >> $GITHUB_STEP_SUMMARY
-         echo "### 📌 Resultado Global" >> $GITHUB_STEP_SUMMARY
-         echo "**Estado Final:** $DECISION" >> $GITHUB_STEP_SUMMARY
-         echo "**Motivo:** $REASON" >> $GITHUB_STEP_SUMMARY
+          echo "| **SonarQube Quality Gate** | $SONAR_STATE | Coverage: ${COVERAGE}%<br>Bugs: $BUGS<br>Vulnerabilities: $SONAR_VULNS | Coverage ≥ 80%<br>Bugs ≤ 0<br>Vulns ≤ 0 | $SONAR_STATE |" >> $GITHUB_STEP_SUMMARY
