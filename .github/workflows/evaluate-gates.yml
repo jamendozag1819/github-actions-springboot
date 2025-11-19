@@ -155,6 +155,32 @@ jobs:
           # Final decision
           DECISION="PASS"
           REASONS=("All gates passed")
+          
+          jq -n \
+          --arg sonar_status "$SONAR_STATUS" \
+          --arg coverage "$COVERAGE" \
+          --arg bugs "$BUGS" \
+          --arg sonar_vulns "$VULNS" \
+          --arg snyk_critical "$SNYK_CRITICAL" \
+          --arg snyk_high "$SNYK_HIGH" \
+          --arg snyk_medium "$SNYK_MEDIUM" \
+          --arg decision "$DECISION" \
+          --arg reason "${REASONS[*]}" \
+          '{
+          decision: $decision,
+          reason: $reason,
+          sonar: {
+          status: $sonar_status,
+          coverage: $coverage,
+          bugs: $bugs,
+          vulnerabilities: $sonar_vulns
+          },
+          snyk: {
+          critical: $snyk_critical,
+          high: $snyk_high,
+          medium: $snyk_medium
+          }
+          }' > gate-decision.json
 
           echo "gate-result=$DECISION" >> $GITHUB_OUTPUT
           echo "gate-reason=${REASONS[*]}" >> $GITHUB_OUTPUT
