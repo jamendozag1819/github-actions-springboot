@@ -78,7 +78,8 @@ jobs:
           ls -la snyk-scanning/results/snyk-results.json || true
 
       - name: Send results to Snyk Monitor (Advanced)
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release') || github.event_name == 'workflow_dispatch'
+        if: | 
+          github.ref_name == 'main' || contains(github.ref_name, 'release') || github.event_name == 'workflow_dispatch'
         env:
          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
          SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
