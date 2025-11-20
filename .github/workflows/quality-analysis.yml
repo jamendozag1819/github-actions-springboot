@@ -60,7 +60,7 @@ jobs:
       ########################################################
       - name: Run Sonar Code Analysis (Composite Action)
         id: sonar_scan
-        uses: action/sonar-code-analysis
+        uses: actions/sonar-code-analysis
         with:
           app-path: "."
           sonar-host-url: "https://sonarcloud.io"
