@@ -91,16 +91,22 @@ runs:
     - name: Sonar Scan
       shell: bash
       env:
-        SONAR_TOKEN: ${{ inputs.sonar-token }}
+       SONAR_TOKEN: ${{ inputs.sonar-token }}
       continue-on-error: true
       run: |
-        cd "${{ inputs.app-path }}"
-        sonar-scanner \
-          -Dsonar.host.url=${{ inputs.sonar-host-url }} \
-          -Dsonar.login=${{ inputs.sonar-token }} \
-          -Dsonar.qualitygate.wait=true \
-          -Dsonar.qualitygate.timeout=300 \
-          || SONAR_EXIT_CODE=$?
+       cd "${{ inputs.app-path }}"
+       sonar-scanner \
+       -Dsonar.host.url=${{ inputs.sonar-host-url }} \
+       -Dsonar.login=${{ inputs.sonar-token }} \
+       -Dsonar.organization=${{ inputs.sonar-organization }} \
+       -Dsonar.projectKey=${{ inputs.sonar-project-key }} \
+       -Dsonar.projectBaseDir="${{ inputs.app-path }}" \
+       -Dsonar.sources="${{ inputs.project-path }}" \
+       -Dsonar.branch.name="${{ inputs.sonar-branch }}" \
+       -Dsonar.qualitygate.wait=true \
+       -Dsonar.qualitygate.timeout=300 \
+       || SONAR_EXIT_CODE=$?
+
 
     - name: Validate Quality Gate
       shell: bash
