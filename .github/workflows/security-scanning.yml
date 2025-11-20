@@ -45,27 +45,6 @@ jobs:
     steps:
 
       # --------------------------
-      # Checkout
-      # --------------------------
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # --------------------------
-      # Setup Java (solo si aplica)
-      # --------------------------
-      - name: Setup Java and Maven
-        uses: ./.github/actions/setup-java-maven
-        with:
-          java-version: ${{ inputs.java-version }}
-
-      # --------------------------
-      # Optional: download artifacts
-      # --------------------------
-      - name: Download build artifacts
-        uses: ./.github/actions/download-build-artifacts
-        continue-on-error: true
-
-      # --------------------------
       # Detect tech stack (multi-stack)
       # --------------------------
       - name: Detect technology stack
