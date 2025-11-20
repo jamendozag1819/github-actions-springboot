@@ -83,9 +83,9 @@ runs:
         snyk test --all-projects 
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
-          --json-file-output=snyk-report.json || true \
-          --token="${SNYK_TOKEN}" || true \
-          --api="${SNYK_API_URL}" || true
+          --json-file-output=snyk-report.json \
+          --token="${SNYK_TOKEN}" \
+          --api="${SNYK_API_URL}"
 
         cat snyk-report.json
 
