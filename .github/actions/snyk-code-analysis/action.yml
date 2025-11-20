@@ -34,7 +34,7 @@ runs:
       shell: bash
       run: |
         cd ${{ inputs.app-path }}
-        python3 "${GITHUB_ACTION_PATH}/detect_tech.py"
+        python3 "$./.github/actions/snyk-code-analysis/detect_tech.py"
         echo "Detected stack: $SNYK_STACK"
 
     - name: Resolve Snyk Command (Python)
