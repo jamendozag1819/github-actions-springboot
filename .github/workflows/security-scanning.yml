@@ -43,93 +43,99 @@ jobs:
       low-count: ${{ steps.security-summary.outputs.low-count }}
 
     steps:
+
+      # --------------------------
+      # Checkout
+      # --------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # --------------------------
+      # Setup Java (solo si aplica)
+      # --------------------------
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
 
+      # --------------------------
+      # Optional: download artifacts
+      # --------------------------
       - name: Download build artifacts
         uses: ./.github/actions/download-build-artifacts
         continue-on-error: true
 
-      - name: Validate Snyk configuration
+      # --------------------------
+      # Detect tech stack (multi-stack)
+      # --------------------------
+      - name: Detect technology stack
+        id: detect-stack
+        run: |
+          chmod +x scripts/detect-tech-stack.py
+          python3 scripts/detect-tech-stack.py
+        shell: bash
+
+      - name: Show detected stacks
+        run: |
+          echo "Detected stacks: $SNYK_STACKS"
+
+      # --------------------------
+      # Map stack -> CLI command
+      # --------------------------
+      - name: Map Snyk command
+        id: map-command
+        run: |
+          chmod +x scripts/snyk-command-map.py
+          python3 scripts/snyk-command-map.py
+          echo "Resolved command: $SNYK_CMD"
+        shell: bash
+
+      - name: Show Snyk command
+        run: |
+          echo "Final Snyk command: $SNYK_CMD"
+
+      # --------------------------
+      # Run Snyk Code Analysis
+      # --------------------------
+      - name: Run Snyk Code (SAST)
+        id: snyk-code
+        uses: ./.github/actions/snyk-code-analysis
+        with:
+          app-path: "."
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+          snyk-org: ${{ secrets.SNYK_ORG_ID }}
+          snyk-branch: ${{ github.ref_name }}
+          gating-threshold-file: "./gating-configs/snyk_gating_thresholds.json"
+          snyk-project-name: "secure-project"
+
+      # --------------------------
+      # Run Snyk Test (dependency scan)
+      # --------------------------
+      - name: Run Snyk Test
+        id: snyk-test
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          chmod +x snyk-scanning/scripts/validate-snyk.sh || true
-          ./snyk-scanning/scripts/validate-snyk.sh || true
+          echo "Running: $SNYK_CMD"
+          $SNYK_CMD \
+            --org="${SNYK_ORG_ID}" \
+            --project-name="secure-project" \
+            --json-file-output="snyk-scanning/results/snyk-results.json" \
+            --token="${SNYK_TOKEN}" || true
 
-      - name: Run Snyk Code Analysis (Composite Action)
-        id: snyk_scan
-        uses: ./.github/actions/snyk-code-analysis
-        with:
-         app-path: "."
-         snyk-token: ${{ secrets.SNYK_TOKEN }}
-         snyk-org: ${{ secrets.SNYK_ORG_ID }}
-         snyk-branch: ${{ github.ref_name }}
-         gating-threshold-file: "./gating-configs/snyk_gating_thresholds.json"
-         snyk-project-name: api-springboot
-
-      - name: Send results to Snyk Monitor (Advanced)
-        if: github.ref == 'refs/heads/main' || contains(github.ref, 'refs/heads/release') || github.event_name == 'workflow_dispatch'
-        env:
-         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-         SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
-        run: |
-         echo "🔍 Searching for pom.xml files..."
-         POMS=$(find . -maxdepth 4 -name "pom.xml")
-
-         echo "📁 Found the following pom.xml files:"
-         echo "$POMS"
-
-         if [ -z "$POMS" ]; then
-         echo "❌ No pom.xml found. Cannot run snyk monitor."
-         exit 0
-         fi
-         
-         # Use mvnw if available, fallback to mvn
-         if [ -f "./mvnw" ]; then
-         MVN="./mvnw -q"
-         echo "✔ Using Maven Wrapper (mvnw)"
-         else
-         MVN="mvn -q"
-         echo "✔ Using system Maven (mvn)"
-         fi
-
-         # Loop through all pom.xml files
-         for POM in $POMS; do
-         DIR=$(dirname "$POM")
-
-         echo ""
-         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-         echo "📌 Processing module:"
-         echo "📍 Directory: $DIR"
-         pwd
-         echo "📄 POM: $POM"
-         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-         pwd
-         ls -la
-         echo "📦 Generating dependency tree..."
-         chmod +x mvnw
-         $MVN dependency:tree -DoutputType=dot --batch-mode --non-recursive || echo "⚠ Maven dependency tree failed"
-
-         echo "🛰 Running Snyk monitor..."
-         snyk monitor --org=${{ secrets.SNYK_ORG_ID }} --project-name="cicd-pipeline-poc/microservice-moc-app-deps" || true
-
-         done
-         echo "✅ Snyk monitor execution completed"
-
+      # --------------------------
+      # Summary generation
+      # --------------------------
       - name: Generate security summary
         id: security-summary
         uses: ./.github/actions/generate-security-summary
         with:
           results-file: snyk-scanning/results/snyk-results.json
 
+      # --------------------------
+      # Store artifacts
+      # --------------------------
       - name: Upload security scan results
         uses: actions/upload-artifact@v4
         with:
