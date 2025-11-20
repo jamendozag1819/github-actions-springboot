@@ -71,8 +71,10 @@ jobs:
       - name: Detect technology stack
         id: detect-stack
         run: |
-          chmod +x scripts/detect-tech-stack.py
-          python3 scripts/detect-tech-stack.py
+          pwd
+          ls -al
+          chmod +x ./scripts/detect-tech-stack.py
+          python3 ./scripts/detect-tech-stack.py
         shell: bash
 
       - name: Show detected stacks
