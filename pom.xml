@@ -56,7 +56,6 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		 Vulnerable libs for Snyk testing 
 
 		<dependency>
 			<groupId>commons-collections</groupId>
