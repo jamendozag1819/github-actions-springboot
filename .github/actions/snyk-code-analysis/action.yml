@@ -75,7 +75,8 @@ runs:
         SNYK_TOKEN: ${{ inputs.snyk-token }}
       run: |
         cd ${{ inputs.app-path }}
-        
+        pwd
+        ls -al
         echo "Running: $SNYK_CMD"
 
         #$SNYK_CMD \
