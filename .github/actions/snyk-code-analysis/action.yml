@@ -79,7 +79,7 @@ runs:
         pwd
         ls -al
         echo "Running: $SNYK_CMD"
-
+        chmod +x ./mvnw
         #$SNYK_CMD \
         snyk test --all-projects 
           --org="${{ inputs.snyk-org }}" \
