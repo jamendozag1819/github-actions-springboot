@@ -3,106 +3,77 @@ description: "Run SonarCloud scan and validate quality gate"
 
 inputs:
   app-path:
-    description: 'Path of the project to scan'
+    description: "Path of the project to scan"
     required: true
   sonar-host-url:
-    description: 'url of the SonarCloud server'
+    description: "URL of the SonarCloud server"
     required: true
   tech-version:
-    description: 'Node.js version to use'
+    description: "Node.js or Java version"
     required: true
   project-path:
-    description: 'Path to the Node.js project'
+    description: "Path to the project"
     required: true
   sonar-token:
-    description: 'SonarCloud token'
+    description: "SonarCloud token"
     required: true
   sonar-organization:
-    description: 'SonarCloud organization key'
+    description: "SonarCloud organization key"
     required: true
   sonar-project-key:
-    description: 'SonarCloud project key'
+    description: "SonarCloud project key"
     required: true
   sonar-branch:
-    description: 'Branch name for the Sonar scan'
+    description: "Branch name for Sonar scan"
     required: false
   app-techstack:
-    description: ''
+    description: "auto, nodejs, java, etc."
     required: true
 
-    runs:
+runs:
+  using: "composite"
+  steps:
+
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
-        java-version: '17'
+        distribution: "temurin"
+        java-version: "17"
 
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: "3.x"
 
     - name: Setup Node (for sonar-scanner)
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: "18"
 
     - name: Install Sonar Scanner
+      shell: bash
       run: npm install -g sonar-scanner
 
-
-    # - name: Fetch sonar configs
-    #   uses: actions/checkout@v4
-    #   with:
-    #     repository: poc-pipeline/poc-ci-pipeline-template/sonar-prop-config
-    #     path: sonar-config
-    
     - name: Sonar Env Info
       shell: bash
       run: |
         echo "Sonar Scan Configuration:"
         echo "App Path: ${{ inputs.app-path }}"
         echo "Sonar Host URL: ${{ inputs.sonar-host-url }}"
-
-        if [[ "${{ inputs.app-techstack }}" == "java" ]]; then
-            echo "Java version: ${{ inputs.tech-version }}"
-        fi
-
-        if [[ "${{ inputs.app-techstack }}" == "nodejs" ]]; then
-            echo "Node Version: ${{ inputs.tech-version }}"
-        fi
-        
-        echo "Project Path: ${{ inputs.project-path }}"
-        echo "Sonar Organization: ${{ inputs.sonar-organization }}"
-        echo "Sonar Project Key: ${{ inputs.sonar-project-key }}"
-    
-    # - name: Generate sonar-project.properties
-    #   shell: bash
-    #   run: |
-    #     cd ${{ inputs.app-path }}
-    #     cat <<EOF > sonar-project.properties
-    #     sonar.projectKey=${{ inputs.sonar-project-key }}
-    #     sonar.organization=${{ inputs.sonar-organization }}
-    #     sonar.sources=src,helm,Dockerfile
-    #     sonar.tests=src
-    #     sonar.test.inclusions=**/__tests__/**/*.js
-    #     sonar.javascript.lcov.reportPaths=coverage/lcov.info
-    #     sonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**
-    #     sonar.sourceEncoding=UTF-8
-    #     EOF
-      #-Dsonar.projectVersion=1.0.0 \
+        echo "Organization: ${{ inputs.sonar-organization }}"
+        echo "Project Key: ${{ inputs.sonar-project-key }}"
+        echo "Tech Stack: ${{ inputs.app-techstack }}"
 
     - name: Detect Project Tech Stack
       shell: bash
-      run:  |
-          cd "${{ inputs.app-path }}"
-          python3 scripts/sonar-tech.py
+      run: |
+        cd "${{ inputs.app-path }}"
+        python3 scripts/sonar-tech.py
 
     - name: Generate Properties
       shell: bash
       run: |
         cd "${{ inputs.app-path }}"
-
         echo "Generating properties using: $SONAR_PROPS"
 
         > sonar-project.properties
@@ -114,45 +85,31 @@ inputs:
           echo "" >> sonar-project.properties
         done
 
-        echo "Project Pproperties:"
+        echo "Generated sonar-project.properties:"
         cat sonar-project.properties
 
     - name: Sonar Scan
+      shell: bash
       env:
         SONAR_TOKEN: ${{ inputs.sonar-token }}
-      shell: bash
       continue-on-error: true
       run: |
-        cd ${{ inputs.app-path }}
+        cd "${{ inputs.app-path }}"
         sonar-scanner \
           -Dsonar.host.url=${{ inputs.sonar-host-url }} \
           -Dsonar.login=${{ inputs.sonar-token }} \
           -Dsonar.qualitygate.wait=true \
-          -Dsonar.qualitygate.timeout=300 &> /dev/null || SONAR_EXIT_CODE=$? 
-
-    # - name: Check Quality Gate
-    #   shell: bash
-    #   env:
-    #     SONAR_TOKEN: ${{ inputs.sonar-token }}
-    #   run: |
-    #     cd ${{ inputs.app-path }}
-    #     STATUS=$(curl -s -u $SONAR_TOKEN: \
-    #       "${{ inputs.sonar-host-url }}/api/qualitygates/project_status?projectKey=poc-pipeline_multi-stack-project-hub" \
-    #       | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-    #     echo "Sonar status: $STATUS"
-    #     if [ "$STATUS" = "ERROR" ]; then
-    #       echo "::error::Quality Gate failed"
-    #       exit 1
-    #     fi
+          -Dsonar.qualitygate.timeout=300 \
+          || SONAR_EXIT_CODE=$?
 
     - name: Validate Quality Gate
       shell: bash
-      continue-on-error: true
       env:
         SONAR_TOKEN: ${{ inputs.sonar-token }}
+      continue-on-error: true
       run: |
         echo "Running Sonar gating..."
-        cd ${{ inputs.app-path }}
+        cd "${{ inputs.app-path }}"
         python3 "${GITHUB_ACTION_PATH}/sonar_gating.py" \
           --sonar-host "${{ inputs.sonar-host-url }}" \
           --token "${{ inputs.sonar-token }}" \
