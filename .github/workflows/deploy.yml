@@ -27,7 +27,6 @@ env:
 jobs:
   security-scan:
     name: Snyk Analysis
-    needs: [load-overrides, unit-tests]
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: '17'
@@ -37,7 +36,6 @@ jobs:
   
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [load-overrides, unit-tests]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
@@ -47,7 +45,6 @@ jobs:
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
   evaluate-gates:
-    needs: [ code-quality, security-scan ]
     name: Evaluate Gates (Enterprise)
     uses: ./.github/workflows/evaluate-gates.yml
     with:
