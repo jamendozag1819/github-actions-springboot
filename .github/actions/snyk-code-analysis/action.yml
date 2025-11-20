@@ -79,7 +79,7 @@ runs:
         echo "Running: $SNYK_CMD"
 
         #$SNYK_CMD \
-        snyk test --file=pom.xml --package-manager=maven 
+        snyk test --all-projects 
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true \
