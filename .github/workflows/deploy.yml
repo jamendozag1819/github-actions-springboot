@@ -25,7 +25,6 @@ env:
   DOCKER_BUILDKIT: 1
   PDP_URL: http://localhost:7766
   REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
-  REGISTRY_REPOSITORY: "dev-pipeline-docker-docker"
 
 jobs:
   build:
