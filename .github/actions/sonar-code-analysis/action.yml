@@ -30,15 +30,26 @@ inputs:
     description: ''
     required: true
 
-runs:
-  using: "composite"
-  steps:
-    - name: Install Java and Sonar Scanner
-      shell: bash
-      run: |
-        apt-get update  -qq > /dev/null
-        apt-get install -y openjdk-17-jre python3  > /dev/null
-        npm install -g sonar-scanner --silent > /dev/null
+    runs:
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Setup Node (for sonar-scanner)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Sonar Scanner
+      run: npm install -g sonar-scanner
+
 
     # - name: Fetch sonar configs
     #   uses: actions/checkout@v4
