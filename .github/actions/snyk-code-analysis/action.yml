@@ -44,22 +44,22 @@ runs:
         python3 ./scripts/snyk-command-map.py
         echo "Resolved SNYK_CMD: $SNYK_CMD"
 
-    # - name: Run Snyk Scan
-    #   shell: bash
-    #   continue-on-error: true
-    #   env:
-    #     SNYK_TOKEN: ${{ inputs.snyk-token }}
-    #     SNYK_API_URL: "https://api.snyk.io"
-    #   run: |
-    #     cd ${{ inputs.app-path }}
-    #     snyk test \
-    #       --org=${{ inputs.snyk-org }} \
-    #       --project-name=${{ inputs.snyk-project-name }} \
-    #       --json-file-output=snyk-report.json || true \
-    #       --api="${SNYK_API_URL}" || true \
-    #       --token="${SNYK_TOKEN}" || true
+    - name: Run Snyk Scan
+      shell: bash
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+        SNYK_API_URL: "https://api.snyk.io"
+      run: |
+        cd ${{ inputs.app-path }}
+        snyk test \
+          --org=${{ inputs.snyk-org }} \
+          --project-name=${{ inputs.snyk-project-name }} \
+          --json-file-output=snyk-report.json || true \
+          --api="${SNYK_API_URL}" || true \
+          --token="${SNYK_TOKEN}" || true
         
-    #     cat snyk-report.json
+        cat snyk-report.json
 
     - name: Run Snyk Scan
       shell: bash
