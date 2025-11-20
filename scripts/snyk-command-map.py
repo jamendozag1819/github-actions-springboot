@@ -7,7 +7,7 @@ stack = os.getenv("SNYK_STACK", "unknown")
 print(f"Resolving Snyk command for stack: {stack}")
 
 SNYK_COMMAND_MAP = {
-    "java-maven": "snyk test --all-projects",
+    "java-maven": "snyk test --file=pom.xml --package-manager=maven",
     "java-gradle": "snyk test --all-projects",
     "android": "snyk test --all-projects",
     "ios": "snyk test --all-projects",

@@ -48,7 +48,7 @@ runs:
       shell: bash
       run: |
         cd ${{ inputs.app-path }}
-        python3 ./scripts/snyk-command-map.py
+        python3 scripts/snyk-command-map.py
         echo "Resolved SNYK_CMD: $SNYK_CMD"
 
     - name: Run Snyk Scan
