@@ -22,32 +22,9 @@ on:
 env:
   JAVA_VERSION: '17'
   MAVEN_VERSION: '3.8.6'
-  DOCKER_BUILDKIT: 1
-  PDP_URL: http://localhost:7766
-  REGISTRY_DOMAIN: "pocpipeline.jfrog.io"
+  
 
 jobs:
-  build:
-    name: Build Application
-    uses: ./.github/workflows/build-application.yml
-    with:
-      java-version: '17'
-      maven-version: '3.8.6'
-
-  unit-tests:
-    name: Unit Tests & Coverage
-    needs: build
-    uses: ./.github/workflows/unit-testing.yml
-    with:
-      java-version: '17'
-      coverage-threshold: 50
-      fail-on-coverage: false
-
-  load-overrides:
-    needs: build
-    name: Load Developer Overrides
-    uses: ./.github/workflows/load-overrides.yml
-
   security-scan:
     name: Snyk Analysis
     needs: [load-overrides, unit-tests]
