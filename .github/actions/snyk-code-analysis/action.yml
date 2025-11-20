@@ -14,6 +14,13 @@ inputs:
   snyk-project-name:
     description: 'snyk project name'
     required: true
+  snyk-branch:
+    description: 'Optional branch for Snyk project'
+    required: false
+  gating-threshold-file:
+    description: 'Path to gating thresholds JSON'
+    required: false
+    default: "./gating-configs/snyk_gating_thresholds.json"
 
 runs:
   using: "composite"
