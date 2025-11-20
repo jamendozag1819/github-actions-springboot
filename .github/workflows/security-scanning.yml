@@ -106,7 +106,7 @@ jobs:
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
           snyk-branch: ${{ github.ref_name }}
           gating-threshold-file: "./gating-configs/snyk_gating_thresholds.json"
-          snyk-project-name: "cicd-pipeline-poc/microservice-moc-app-deps"
+          snyk-project-name: cicd-pipeline-poc/microservice-moc-app-deps
 
       # --------------------------
       # Run Snyk Test (dependency scan)
