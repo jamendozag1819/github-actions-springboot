@@ -41,7 +41,7 @@ runs:
       shell: bash
       run: |
         cd ${{ inputs.app-path }}
-        python3 "${GITHUB_ACTION_PATH}/resolve_snyk_command.py"
+        python3 ./.github/actions/snyk-code-analysis/resolve_snyk_command.py
         echo "Resolved SNYK_CMD: $SNYK_CMD"
 
     # - name: Run Snyk Scan
