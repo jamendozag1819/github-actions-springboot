@@ -39,15 +39,34 @@ def load_from_report(report_path):
     if not os.path.exists(report_path):
         err(f"Report file not found: {report_path}")
         sys.exit(1)
+
     with open(report_path, "r") as f:
         data = json.load(f)
-    issues = data.get("vulnerabilities", [])
+
+    issues_raw = None
+
+    # Caso A — El archivo es un OBJETO con "vulnerabilities"
+    if isinstance(data, dict):
+        issues_raw = data.get("vulnerabilities", [])
+
+    # Caso B — El archivo entero es una LISTA (output alternativo de Snyk)
+    elif isinstance(data, list):
+        issues_raw = data
+
+    else:
+        err(f"Unexpected report format: must be dict or list, got {type(data)}")
+        sys.exit(1)
+
+    # Normalizar al formato que usa el gating
     formatted = []
-    for issue in issues:
+    for issue in issues_raw:
+        sev = issue.get("severity", issue.get("attributes", {}).get("severity", "unknown"))
         formatted.append({
-            "attributes": {"severity": issue.get("severity", "unknown")}
+            "attributes": {"severity": sev}
         })
+
     return formatted
+
 
 def count_by_severity(issues):
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}

@@ -80,8 +80,7 @@ runs:
         ls -al
         echo "Running: $SNYK_CMD"
         chmod +x ./mvnw
-        #$SNYK_CMD \
-        snyk test --all-projects \
+        $SNYK_CMD \
           --org="${{ inputs.snyk-org }}" \
           --json-file-output=snyk-report.json \
           --token="${SNYK_TOKEN}" \
