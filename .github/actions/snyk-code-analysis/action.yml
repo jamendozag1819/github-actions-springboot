@@ -81,7 +81,7 @@ runs:
         echo "Running: $SNYK_CMD"
         chmod +x ./mvnw
         #$SNYK_CMD \
-        snyk test --all-projects 
+        snyk test --all-projects \
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json \
