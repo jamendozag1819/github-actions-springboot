@@ -107,7 +107,6 @@ jobs:
           echo "Running: $SNYK_CMD"
           $SNYK_CMD \
             --org="${SNYK_ORG_ID}" \
-            --project-name="secure-project-backend" \
             --json-file-output="snyk-scanning/results/snyk-results-backend.json" \
             --token="${SNYK_TOKEN}" || true
 
