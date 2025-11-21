@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           chmod +x ./scripts/snyk-tech.py
-          python3 ./scripts/snyk-tech.py --root ./
+          python3 ./scripts/snyk-tech.py
 
       - name: Show detected stacks (Backend)
         shell: bash
