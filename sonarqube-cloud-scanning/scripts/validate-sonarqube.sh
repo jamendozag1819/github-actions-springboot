@@ -149,7 +149,7 @@ check_project_config() {
     fi
     
     # Check if we're in a Maven project
-    if [ -f "microservice-moc-app/pom.xml" ]; then
+    if [ -f "pom.xml" ]; then
         echo -e "${GREEN}✓ Maven project detected (pom.xml found)${NC}"
         
         # Check if SonarQube plugin is configured
