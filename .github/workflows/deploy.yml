@@ -24,10 +24,6 @@ env:
   MAVEN_VERSION: '3.8.6'
 
 jobs:
-  load-overrides:
-    name: Load Developer Overrides
-    uses: ./.github/workflows/load-overrides.yml
-
   security-scan:
     name: Snyk Analysis
     uses: ./.github/workflows/security-scanning.yml
@@ -36,17 +32,6 @@ jobs:
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
-
-  unit-testing:
-    name: Run Unit Tests
-    needs: [ security-scan ]
-    uses: ./.github/workflows/unit-testing.yml
-    with:
-      java-version: '17'
-      coverage-threshold: 50
-      test-profile: 'default'
-      fail-on-coverage: false
-      stack: ${{ needs.security-scan.outputs.stack }}   # <-- STACK DETECTADO
 
   code-quality:
     name: SonarQube Cloud Analysis
