@@ -55,9 +55,6 @@ jobs:
           path: .
         continue-on-error: true
 
-      ########################################################
-      # CALL YOUR ACTION HERE
-      ########################################################
       - name: Run Sonar Code Analysis (Composite Action)
         id: sonar_scan
         uses: ./.github/actions/sonar-code-analysis
@@ -71,9 +68,6 @@ jobs:
           sonar-project-key: ${{ secrets.SONAR_PROJECT_KEY }}
           sonar-branch: ${{ github.ref_name }}
           app-techstack: "auto"
-
-
-      ########################################################
 
       - name: Upload quality results
         uses: actions/upload-artifact@v4
