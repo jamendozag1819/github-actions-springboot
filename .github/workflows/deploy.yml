@@ -5,9 +5,9 @@ permissions:
 
 on:
   push:
-    branches: [ main , '*release*']
+    branches: [ main, '*release*' ]
   pull_request:
-    branches: [ main , '*release*']
+    branches: [ main, '*release*' ]
   workflow_dispatch:
     inputs:
       override_gates:
@@ -22,7 +22,6 @@ on:
 env:
   JAVA_VERSION: '17'
   MAVEN_VERSION: '3.8.6'
-  
 
 jobs:
   load-overrides:
@@ -49,7 +48,6 @@ jobs:
       fail-on-coverage: false
       stack: ${{ needs.security-scan.outputs.stack }}   # <-- STACK DETECTADO
 
-  
   code-quality:
     name: SonarQube Cloud Analysis
     needs: [ security-scan ]
@@ -70,5 +68,4 @@ jobs:
       snyk-results-file: "snyk-scanning/results/snyk-results.json"
       snyk-code-results-file: "snyk-scanning/results/snyk-code-results.json"
       overrides-file: "overrides/final-thresholds.json"
-      # pass override flag in case manual emergency execution is used
       manual-override: ${{ github.event.inputs.override_gates || 'false' }}
