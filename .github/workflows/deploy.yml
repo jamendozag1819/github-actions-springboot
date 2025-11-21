@@ -68,7 +68,7 @@ jobs:
     needs: [ code-quality ]
     uses: ./.github/workflows/jira.yml
     with:
-      issue-key: ${{ github.head_ref || github.ref_name }}
+      issue-key: ${{ steps.extract.outputs.issue }}
       new-status: "31"   # Transition ID de Jira
     secrets:
       JIRA_URL: ${{ secrets.JIRA_URL }}
