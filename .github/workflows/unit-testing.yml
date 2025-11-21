@@ -1,4 +1,5 @@
 name: 'Unit Testing'
+
 on:
   workflow_call:
     inputs:
@@ -22,7 +23,11 @@ on:
         required: false
         type: boolean
         default: false
-        
+      stack:
+        description: 'Detected technology stack'
+        required: true
+        type: string
+
     outputs:
       tests-passed:
         description: 'Whether all tests passed'
@@ -47,7 +52,7 @@ jobs:
   unit-tests:
     name: Unit Tests & Coverage
     runs-on: ubuntu-latest
-    
+
     outputs:
       tests-passed: ${{ steps.process_results.outputs.tests-passed }}
       tests-total: ${{ steps.process_results.outputs.tests-total }}
@@ -59,35 +64,28 @@ jobs:
       coverage-threshold-met: ${{ steps.process_results.outputs.coverage-threshold-met }}
       test-artifacts-ready: ${{ steps.process_results.outputs.test-artifacts-ready }}
       test-status: ${{ steps.determine_status.outputs.TEST_STATUS }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
-          
-      - name: Download build artifacts
-        uses: ./.github/actions/download-build-artifacts
-        continue-on-error: true
-        
+
       - name: Verify build prerequisites
         run: |
           echo "🔍 Verifying build prerequisites for testing..."
           
-          # Check if we have compiled classes
           if [ ! -d "target/classes" ]; then
-            echo "⚠️ No compiled classes found - will compile first"
-            echo "📦 Compiling sources for testing..."
+            echo "⚠️ No compiled classes found - compiling sources..."
             mvn compile -q
           else
             echo "✅ Compiled classes found"
             ls -la target/classes/
           fi
-          
-          # Verify test sources exist
+
           if [ -d "src/test/java" ]; then
             echo "✅ Test sources found:"
             find src/test/java -name "*.java" | wc -l | xargs echo "   Test files:"
@@ -99,36 +97,66 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
-          
-          # Set test profile if specified
-          PROFILE_ARG=""
-          if [ "${{ inputs.test-profile }}" != "default" ]; then
-            PROFILE_ARG="-P${{ inputs.test-profile }}"
-            echo "📋 Using test profile: ${{ inputs.test-profile }}"
+          STACK="${{ inputs.stack }}"
+          echo "🔍 Detected stack for tests: $STACK"
+
+          mkdir -p test-results
+
+          # -------------------------
+          # JAVA / MAVEN
+          # -------------------------
+          if [ "$STACK" = "java-maven" ]; then
+            PROFILE_ARG=""
+            if [ "${{ inputs.test-profile }}" != "default" ]; then
+              PROFILE_ARG="-P${{ inputs.test-profile }}"
+            fi
+
+            echo "🚀 Running Maven tests..."
+            mvn test jacoco:report $PROFILE_ARG \
+              -Dmaven.test.failure.ignore=false \
+              -Djacoco.skip=false || TEST_EXIT_CODE=$?
+
+            cp -r target/surefire-reports/* test-results/ || true
+            cp -r target/site/jacoco/* test-results/ || true
           fi
-          
-          # Run tests with coverage
-          echo "🚀 Executing: mvn test jacoco:report $PROFILE_ARG"
-          mvn test jacoco:report $PROFILE_ARG \
-            -Dmaven.test.failure.ignore=false \
-            -Djacoco.skip=false || TEST_EXIT_CODE=$?
-          
-          # Store exit code for later evaluation
+
+          # -------------------------
+          # JAVA / GRADLE
+          # -------------------------
+          if [ "$STACK" = "java-gradle" ]; then
+            echo "🚀 Running Gradle tests..."
+            ./gradlew test || TEST_EXIT_CODE=$?
+
+            cp -r build/test-results/test/* test-results/ || true
+            cp -r build/reports/* test-results/ || true
+          fi
+
+          # -------------------------
+          # NODE / ANGULAR
+          # -------------------------
+          if [ "$STACK" = "nodejs" ] || [ "$STACK" = "angular" ]; then
+            echo "📦 Installing Node dependencies..."
+            npm install
+
+            echo "🚀 Running Node/Angular tests..."
+            npm test || TEST_EXIT_CODE=$?
+
+            cp -r coverage/* test-results/ || true
+          fi
+
+          # -------------------------
+          # PYTHON
+          # -------------------------
+          if [ "$STACK" = "python" ]; then
+            pip install -r requirements.txt || true
+            pytest --junitxml=test-results/results.xml || TEST_EXIT_CODE=$?
+          fi
+
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
-          
-          # Show test execution summary
-          echo ""
-          echo "📊 Test Execution Summary:"
-          if [ -d "target/surefire-reports" ]; then
-            echo "   JUnit reports: $(ls target/surefire-reports/*.xml 2>/dev/null | wc -l) files"
-          fi
-          if [ -f "target/site/jacoco/jacoco.xml" ]; then
-            echo "   JaCoCo coverage: Generated"
-            echo "   Coverage report size: $(du -h target/site/jacoco/jacoco.xml | cut -f1)"
-          else
-            echo "   JaCoCo coverage: Not generated"
-          fi
-          
+
+          echo "📊 Collected test results:"
+          ls -R test-results || true
+
           exit ${TEST_EXIT_CODE:-0}
 
       - name: Process test results
@@ -146,35 +174,33 @@ jobs:
         if: always()
         run: |
           echo "🎯 Determining overall test status..."
-          
+
           TESTS_PASSED="${{ steps.process_results.outputs.tests-passed }}"
           COVERAGE_MET="${{ steps.process_results.outputs.coverage-threshold-met }}"
           TEST_EXIT_CODE="${{ steps.run_tests.outputs.TEST_EXIT_CODE }}"
-          
-          # Determine status based on test results and coverage
+
           if [ "$TESTS_PASSED" = "true" ] && [ "$COVERAGE_MET" = "true" ]; then
             TEST_STATUS="PASSED"
             STATUS_ICON="✅"
             STATUS_MESSAGE="All tests passed and coverage threshold met"
           elif [ "$TESTS_PASSED" = "true" ] && [ "$COVERAGE_MET" = "false" ]; then
-            TEST_STATUS="WARNING" 
+            TEST_STATUS="WARNING"
             STATUS_ICON="⚠️"
             STATUS_MESSAGE="Tests passed but coverage below threshold (${{ inputs.coverage-threshold }}%)"
           elif [ "$TESTS_PASSED" = "false" ] || [ "${TEST_EXIT_CODE:-0}" -ne 0 ]; then
             TEST_STATUS="FAILED"
             STATUS_ICON="❌"
-            STATUS_MESSAGE="Some tests failed or test execution error occurred"
+            STATUS_MESSAGE="Some tests failed or an error occurred"
           else
             TEST_STATUS="UNKNOWN"
             STATUS_ICON="❓"
             STATUS_MESSAGE="Unable to determine test status"
           fi
-          
+
           echo "TEST_STATUS=$TEST_STATUS" >> $GITHUB_OUTPUT
           echo "STATUS_ICON=$STATUS_ICON" >> $GITHUB_OUTPUT
           echo "STATUS_MESSAGE=$STATUS_MESSAGE" >> $GITHUB_OUTPUT
-          
-          echo ""
+
           echo "$STATUS_ICON Final Test Status: $TEST_STATUS"
           echo "📋 $STATUS_MESSAGE"
 
@@ -188,18 +214,16 @@ jobs:
             target/surefire-reports/
             target/site/jacoco/
           retention-days: 3
-          
+
       - name: Generate concise test summary
         if: always()
         run: |
-          # Determine coverage threshold status
-          COVERAGE_STATUS=""
           if [ "${{ steps.process_results.outputs.coverage-threshold-met }}" = "true" ]; then
             COVERAGE_STATUS="✅ Met"
           else
             COVERAGE_STATUS="⚠️ Below threshold"
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## ${{ steps.determine_status.outputs.STATUS_ICON }} Unit Tests & Coverage: **${{ steps.determine_status.outputs.TEST_STATUS }}**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -213,31 +237,26 @@ jobs:
         run: |
           TEST_STATUS="${{ steps.determine_status.outputs.TEST_STATUS }}"
           FAIL_ON_COVERAGE="${{ inputs.fail-on-coverage }}"
-          
-          echo "🎯 Evaluating workflow continuation criteria..."
+
+          echo "🎯 Evaluating continuation criteria..."
           echo "   Test Status: $TEST_STATUS"
           echo "   Fail on Coverage: $FAIL_ON_COVERAGE"
-          
+
           case "$TEST_STATUS" in
             "PASSED")
-              echo "✅ All criteria met - workflow can continue"
               exit 0
               ;;
             "WARNING")
               if [ "$FAIL_ON_COVERAGE" = "true" ]; then
-                echo "❌ Coverage threshold not met and fail-on-coverage is enabled"
                 exit 1
               else
-                echo "⚠️ Coverage warning but continuing (fail-on-coverage: false)"
                 exit 0
               fi
               ;;
             "FAILED")
-              echo "❌ Tests failed - stopping workflow"
               exit 1
               ;;
             *)
-              echo "❓ Unknown test status - continuing with caution"
               exit 0
               ;;
           esac
