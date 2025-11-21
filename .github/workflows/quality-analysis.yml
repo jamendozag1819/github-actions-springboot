@@ -1,4 +1,5 @@
 name: 'Code Quality Analysis'
+
 on:
   workflow_call:
     inputs:
@@ -7,6 +8,7 @@ on:
         required: false
         type: string
         default: '17'
+
     secrets:
       SONAR_TOKEN:
         required: true
@@ -27,98 +29,38 @@ on:
         value: ${{ jobs.code-quality.outputs.sonar-gate-exit-code }}
 
 jobs:
+
   code-quality:
-    name: Code Quality Analysis
+    name: SonarCloud Analysis (Multistack)
     runs-on: ubuntu-latest
 
     outputs:
-      quality-gate-status: ${{ steps.sonarqube_scan.outputs.QUALITY_GATE_STATUS }}
-      sonarqube-configured: ${{ steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED }}
-      sonar-gate-exit-code: ${{ steps.sonarqube_scan.outputs.SONAR_GATE_EXIT_CODE }}
+      quality-gate-status: ${{ steps.sonar_scan.outputs.quality_gate_status }}
+      sonarqube-configured: ${{ steps.sonar_scan.outputs.sonarqube_configured }}
+      sonar-gate-exit-code: ${{ steps.sonar_scan.outputs.sonar_gate_exit_code }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java and Maven
-        uses: ./.github/actions/setup-java-maven
+      - name: Run Sonar Code Analysis (Composite Action)
+        id: sonar_scan
+        uses: ./.github/actions/sonar-code-analysis
         with:
-          java-version: ${{ inputs.java-version }}
-
-      - name: Download build artifacts
-        uses: ./.github/actions/download-build-artifacts
-        continue-on-error: true
-
-      - name: Download test results
-        uses: actions/download-artifact@v4
-        with:
-          name: test-results
-          path: .
-        continue-on-error: true
-
-      - name: Validate SonarQube configuration
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-        run: |
-          chmod +x sonarqube-cloud-scanning/scripts/validate-sonarqube.sh || true
-          ./sonarqube-cloud-scanning/scripts/validate-sonarqube.sh || true
-
-      - name: Run SonarQube Cloud Analysis
-        id: sonarqube_scan
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-        run: |
-          if [ -z "$SONAR_TOKEN" ]; then
-            echo "SONARQUBE_CONFIGURED=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          echo "SONARQUBE_CONFIGURED=true" >> $GITHUB_OUTPUT
-          if [ ! -d "target/classes" ]; then
-            mvn compile || true
-          fi
-          mvn sonar:sonar \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.token=$SONAR_TOKEN \
-            -Dsonar.organization=${SONAR_ORGANIZATION} \
-            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-            -Dsonar.projectVersion=1.0.0 \
-            -Dsonar.java.binaries=target/classes \
-            -Dsonar.qualitygate.wait=true \
-            -Dsonar.qualitygate.timeout=300 || SONAR_EXIT_CODE=$?
-
-          if [ "${SONAR_EXIT_CODE:-0}" -eq 0 ]; then
-            echo "QUALITY_GATE_STATUS=PASSED" >> $GITHUB_OUTPUT
-          else
-            echo "QUALITY_GATE_STATUS=FAILED" >> $GITHUB_OUTPUT
-          fi
-
-          chmod +x sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh || true
-          set +e
-          ./sonarqube-cloud-scanning/scripts/analyze-quality-gates.sh \
-            -k "${SONAR_PROJECT_KEY}" \
-            -o sonarqube-cloud-scanning/results/quality-gate-result.json || true
-          SONAR_GATE_EXIT_CODE=$?
-          set -e
-          echo "SONAR_GATE_EXIT_CODE=$SONAR_GATE_EXIT_CODE" >> $GITHUB_OUTPUT
-
-      - name: Generate quality summary
-        if: steps.sonarqube_scan.outputs.SONARQUBE_CONFIGURED == 'true'
-        uses: ./.github/actions/generate-quality-summary
-        with:
-          results-file: sonarqube-cloud-scanning/results/quality-gate-result.json
-          project-key: ${{ secrets.SONAR_PROJECT_KEY }}
-          branch-name: ${{ github.ref_name }}
+          app-path: "."
+          sonar-host-url: "https://sonarcloud.io"
+          tech-version: ${{ inputs.java-version }}
+          project-path: "."
+          sonar-token: ${{ secrets.SONAR_TOKEN }}
+          sonar-organization: ${{ secrets.SONAR_ORGANIZATION }}
+          sonar-project-key: ${{ secrets.SONAR_PROJECT_KEY }}
+          sonar-branch: ${{ github.ref_name }}
+          app-techstack: "auto"
 
       - name: Upload quality results
         uses: actions/upload-artifact@v4
         with:
           name: quality-results
-          path: |
-            sonarqube-cloud-scanning/results/quality-gate-result.json
+          path: sonarqube-cloud-scanning/results
           if-no-files-found: warn
           retention-days: 3

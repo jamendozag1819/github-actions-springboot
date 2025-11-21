@@ -189,14 +189,6 @@ jobs:
           echo "gate-result=$DECISION" >> $GITHUB_OUTPUT
           echo "gate-reason=${REASONS[*]}" >> $GITHUB_OUTPUT
 
-      - name: Upload gate-decision artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gate-decision
-          path: gate-decision.json
-          retention-days: 7
-
       - name: GitHub Summary (Table)
         if: always()
         run: |

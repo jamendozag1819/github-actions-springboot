@@ -1,0 +1,20 @@
+{
+  "default": {
+    "critical": 0,
+    "high": 5,
+    "medium": 20,
+    "low": 50
+  },
+  "multi-stack-project-hub": {
+    "critical": 0,
+    "high": 2,
+    "medium": 10,
+    "low": 25
+  },
+  "poc-pipeline": {
+    "critical": 1,
+    "high": 3,
+    "medium": 15,
+    "low": 40
+  }
+}

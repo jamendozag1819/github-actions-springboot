@@ -1,0 +1,104 @@
+name: "Snyk Scan"
+description: "Runs Snyk security scan and reports critical vulnerabilities"
+
+inputs:
+  app-path:
+    description: 'Path of the project to scan'
+    required: true
+  snyk-token:
+    description: 'snyk token'
+    required: true
+  snyk-org:
+    description: 'snyk organization'
+    required: true
+  snyk-project-name:
+    description: 'snyk project name'
+    required: true
+  snyk-branch:
+    description: 'Optional branch for Snyk project'
+    required: false
+  gating-threshold-file:
+    description: 'Path to gating thresholds JSON'
+    required: false
+    default: "./gating-configs/snyk_gating_thresholds.json"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Snyk CLI
+      shell: bash
+      run: npm install -g snyk > /dev/null
+
+    - name: Snyk Env Info
+      shell: bash
+      run: |
+        echo "Snyk Scan Configuration:"
+        echo "App Path: ${{ inputs.app-path }}"
+        echo "Snyk Organization: ${{ inputs.snyk-org }}"
+        echo "Sonar Project Key: ${{ inputs.snyk-project-name }}"
+    
+    - name: Detect Tech Stack via Python
+      shell: bash
+      run: |
+        cd ${{ inputs.app-path }}
+        python3 /home/runner/work/github-actions-springboot/github-actions-springboot/scripts/snyk-tech.py
+        echo "Detected stack: $SNYK_STACK"
+
+    - name: Resolve Snyk Command (Python)
+      shell: bash
+      run: |
+        cd ${{ inputs.app-path }}
+        python3 scripts/snyk-command-map.py
+        echo "Resolved SNYK_CMD: $SNYK_CMD"
+
+#    - name: Run Snyk Scan
+#      shell: bash
+#      continue-on-error: true
+#      env:
+#        SNYK_TOKEN: ${{ inputs.snyk-token }}
+#        SNYK_API_URL: "https://api.snyk.io"
+#      run: |
+#        cd ${{ inputs.app-path }}
+#        snyk test \
+#          --org=${{ inputs.snyk-org }} \
+#          --project-name=${{ inputs.snyk-project-name }} \
+#          --json-file-output=snyk-report.json || true \
+#          --api="${SNYK_API_URL}" || true \
+#          --token="${SNYK_TOKEN}" || true
+#        
+#        cat snyk-report.json
+
+    - name: Run Snyk Scan
+      shell: bash
+      continue-on-error: true
+      env:
+       SNYK_TOKEN: ${{ inputs.snyk-token }}
+       SNYK_API_URL: "https://api.snyk.io"
+      run: |
+        cd ${{ inputs.app-path }}
+        echo "Running: $SNYK_CMD"
+        chmod +x ./mvnw
+        $SNYK_CMD \
+          --org="${{ inputs.snyk-org }}" \
+          --json-file-output=snyk-report.json \
+          --token="${SNYK_TOKEN}" \
+          --api="${SNYK_API_URL}"
+
+        cat snyk-report.json
+
+    - name: Snyk Gating
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+        SNYK_ORG: ${{ inputs.snyk-org }}
+        SNYK_PROJECT: ${{ inputs.snyk-project-name }}
+      run: |
+        
+        echo " Running Snyk gating check for project ${SNYK_PROJECT}..."
+        python3 "${GITHUB_ACTION_PATH}/snyk_gating.py" \
+          --api-url "https://api.snyk.io" \
+          --org-id "${SNYK_ORG}" \
+          --project-name "${SNYK_PROJECT}" \
+          --token "${SNYK_TOKEN}" \
+          --threshold-file ./gating-configs/snyk_gating_thresholds.json \
+          --report-file ./snyk-report.json

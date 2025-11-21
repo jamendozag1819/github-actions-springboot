@@ -28,17 +28,3 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
           
-      - name: Build Spring Boot application
-        run: |
-          mvn clean compile test | true
-          
-      - name: Package application
-        run: |
-          mvn package
-          
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: target/*.jar
-          retention-days: 1
