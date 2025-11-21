@@ -153,7 +153,7 @@ check_project_config() {
         echo -e "${GREEN}✓ Maven project detected (pom.xml found)${NC}"
         
         # Check if SonarQube plugin is configured
-        if grep -q "sonar-maven-plugin" "microservice-moc-app/pom.xml" 2>/dev/null; then
+        if grep -q "sonar-maven-plugin" "pom.xml" 2>/dev/null; then
             echo -e "${GREEN}✓ SonarQube Maven plugin is configured${NC}"
         else
             echo -e "${YELLOW}⚠ SonarQube Maven plugin not found in pom.xml${NC}"
