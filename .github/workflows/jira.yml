@@ -28,8 +28,8 @@ jobs:
     steps:
       - name: Update Jira Ticket
         run: |
-          echo "📌 Updating Jira issue: ${{ inputs.issue-key }}"
-          echo "➡️ Target status: ${{ inputs.new-status }}"
+          echo "Updating Jira issue: ${{ inputs.issue-key }}"
+          echo "Target status: ${{ inputs.new-status }}"
 
           curl -X POST \
             -H "Content-Type: application/json" \
