@@ -37,4 +37,4 @@ jobs:
             -d "{
               \"transition\": { \"id\": \"${{ inputs.new-status }}\" }
             }" \
-            "${{ secrets.JIRA_URL }}/rest/api/3/issue/${{ inputs.issue-key }}/transitions"
+            "${{ secrets.JIRA_URL }}/rest/api/3/issue/KAN-1/transitions"
