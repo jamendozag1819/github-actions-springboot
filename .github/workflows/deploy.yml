@@ -61,15 +61,15 @@ jobs:
 
       - name: Show Extracted Issue
         run: |
-         echo "Jira issue: ${{ steps.extract.outputs.issue }}"
+          echo "Jira issue: ${{ steps.extract.outputs.issue }}"
 
   jira-update:
     name: Update Jira
-    needs: [ code-quality ]
+    needs: [ code-quality, extract-jira ]
     uses: ./.github/workflows/jira.yml
     with:
-      issue-key: ${{ steps.extract.outputs.issue }}
-      new-status: "31"   # Transition ID de Jira
+      issue-key: ${{ needs.extract-jira.outputs.issue }}
+      new-status: "31"
     secrets:
       JIRA_URL: ${{ secrets.JIRA_URL }}
       JIRA_USER: ${{ secrets.JIRA_USER }}
