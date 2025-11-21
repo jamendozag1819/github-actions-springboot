@@ -43,62 +43,49 @@ jobs:
       low-count: ${{ steps.security-summary-backend.outputs.low-count }}
 
     steps:
-
-      # --------------------------
       # Checkout
-      # --------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --------------------------
       # Setup Java
-      # --------------------------
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
 
-      # --------------------------
       # Download artifacts
-      # --------------------------
       - name: Download build artifacts
         uses: ./.github/actions/download-build-artifacts
         continue-on-error: true
 
-      # --------------------------
-      # Detect tech stack
-      # --------------------------
-      - name: Detect technology stack
-        id: detect-stack
+      # Detect tech stack (Backend)
+      - name: Detect technology stack (Backend)
+        id: detect-stack-backend
         shell: bash
         run: |
           chmod +x ./scripts/snyk-tech.py
-          python3 ./scripts/snyk-tech.py
+          python3 ./scripts/snyk-tech.py --root .
 
-      - name: Show detected stacks
+      - name: Show detected stacks (Backend)
         shell: bash
         run: |
          echo "Detected stacks: $SNYK_STACKS"
 
-      # --------------------------
-      # Map stack → CLI command
-      # --------------------------
-      - name: Map Snyk command
-        id: map-command
+      # Map stack → CLI
+      - name: Map Snyk command (Backend)
+        id: map-command-backend
         shell: bash
         run: |
-          chmod +x scripts/snyk-command-map.py
-          python3 scripts/snyk-command-map.py
+          chmod +x ./scripts/snyk-command-map.py
+          python3 ./scripts/snyk-command-map.py
           echo "Resolved command: $SNYK_CMD"
 
-      - name: Show Snyk command
+      - name: Show Snyk command (Backend)
         shell: bash
         run: |
-         echo "Detected stacks: $SNYK_STACKS"
+          echo "Final command: $SNYK_CMD"
 
-      # --------------------------
       # Run Snyk Code (Backend)
-      # --------------------------
       - name: Run Snyk Code (SAST Backend)
         id: snyk-code-backend
         uses: ./.github/actions/snyk-code-analysis
@@ -110,9 +97,7 @@ jobs:
           gating-threshold-file: "./gating-configs/snyk_gating_thresholds.json"
           snyk-project-name: "cicd-pipeline-poc/microservice-moc-app-deps"
 
-      # --------------------------
       # Run Snyk Test (Backend)
-      # --------------------------
       - name: Run Snyk Test (Backend)
         id: snyk-test-backend
         env:
@@ -126,18 +111,14 @@ jobs:
             --json-file-output="snyk-scanning/results/snyk-results-backend.json" \
             --token="${SNYK_TOKEN}" || true
 
-      # --------------------------
-      # Summary generation (Backend)
-      # --------------------------
+      # Summary (Backend)
       - name: Generate security summary (Backend)
         id: security-summary-backend
         uses: ./.github/actions/generate-security-summary
         with:
           results-file: snyk-scanning/results/snyk-results-backend.json
 
-      # --------------------------
-      # Store artifacts (Backend)
-      # --------------------------
+      # Upload artifacts (Backend)
       - name: Upload security scan results (Backend)
         uses: actions/upload-artifact@v4
         with:
@@ -149,12 +130,32 @@ jobs:
           retention-days: 3
 
       # ============================================================
-      # ===================== FRONTEND SCAN ========================
+      # ===================== FRONTEND SCAN =========================
       # ============================================================
 
-      # --------------------------
+      # Detect tech stack (Frontend)
+      - name: Detect technology stack (Frontend)
+        id: detect-stack-frontend
+        shell: bash
+        run: |
+          chmod +x ./scripts/snyk-tech.py
+          python3 ./scripts/snyk-tech.py --root ./frontend
+
+      - name: Show detected stacks (Frontend)
+        shell: bash
+        run: |
+         echo "Detected stacks (frontend): $SNYK_STACKS"
+
+      # Map stack → CLI (Frontend)
+      - name: Map Snyk command (Frontend)
+        id: map-command-frontend
+        shell: bash
+        run: |
+          chmod +x ./scripts/snyk-command-map.py
+          python3 ./scripts/snyk-command-map.py
+          echo "Resolved command: $SNYK_CMD"
+
       # Run Snyk Code (Frontend)
-      # --------------------------
       - name: Run Snyk Code (Frontend)
         id: snyk-code-frontend
         uses: ./.github/actions/snyk-code-analysis
@@ -166,34 +167,28 @@ jobs:
           gating-threshold-file: "./gating-configs/snyk_gating_thresholds.json"
           snyk-project-name: "cicd-pipeline-poc/frontend"
 
-      # --------------------------
       # Run Snyk Test (Frontend)
-      # --------------------------
       - name: Run Snyk Test (Frontend)
         id: snyk-test-frontend
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          echo "Running: $SNYK_CMD"
+          echo "Running frontend: $SNYK_CMD"
           $SNYK_CMD \
             --org="${SNYK_ORG_ID}" \
             --project-name="secure-project-frontend" \
             --json-file-output="snyk-scanning/results/snyk-results-frontend.json" \
             --token="${SNYK_TOKEN}" || true
 
-      # --------------------------
-      # Summary generation (Frontend)
-      # --------------------------
+      # Summary (Frontend)
       - name: Generate security summary (Frontend)
         id: security-summary-frontend
         uses: ./.github/actions/generate-security-summary
         with:
           results-file: snyk-scanning/results/snyk-results-frontend.json
 
-      # --------------------------
-      # Store artifacts (Frontend)
-      # --------------------------
+      # Upload artifacts (Frontend)
       - name: Upload security scan results (Frontend)
         uses: actions/upload-artifact@v4
         with:

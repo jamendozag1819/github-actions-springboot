@@ -1,47 +1,71 @@
 #!/usr/bin/env python3
 import os
+import glob
+import argparse
 
-raw_stacks = os.getenv("SNYK_STACKS", "").strip()
+print("Detecting project tech stack for Snyk...")
 
-print("🔍 Resolving Snyk commands for detected stacks...")
+# ------------------------
+# Parse argument --path
+# ------------------------
+parser = argparse.ArgumentParser(description="Tech stack detector")
+parser.add_argument("--path", default=".", help="Root folder to scan for project files")
+args = parser.parse_args()
 
-if not raw_stacks:
-    print("⚠️  No stacks provided in SNYK_STACKS. Using default 'snyk test'.")
-    stacks = []
-else:
-    stacks = [s.strip() for s in raw_stacks.split(",") if s.strip()]
+root = args.path
+print(f"Scanning directory: {root}")
 
-print(f"📦 Parsed stacks: {stacks}")
+def exists(file):
+    return os.path.exists(os.path.join(root, file))
 
-SNYK_COMMAND_MAP = {
-    "java-maven": "snyk test --all-projects",
-    "java-gradle": "snyk test --all-projects",
-    "android": "snyk test --all-projects",
-    "ios": "snyk test --all-projects",
-    "angular": "snyk test --all-projects",
-    "nodejs": "snyk test",
-    "python": "snyk test",
-    "docker": "snyk test --docker Dockerfile"
-}
+def glob_in_root(pattern):
+    return glob.glob(os.path.join(root, pattern))
 
-DEFAULT_CMD = "snyk test"
-commands = []
+stack = "unknown"
 
-for stack in stacks:
-    cmd = SNYK_COMMAND_MAP.get(stack)
-    if not cmd:
-        print(f"⚠️  Unknown stack '{stack}', using default: {DEFAULT_CMD}")
-        cmd = DEFAULT_CMD
-    commands.append(cmd)
+# ------------------------
+# Tech stack detection
+# ------------------------
+if exists("pom.xml"):
+    print("Detected Maven project")
+    stack = "java-maven"
 
-print(f"✅ Resolved commands: {commands}")
+elif exists("build.gradle") or exists("build.gradle.kts"):
+    print("Detected Gradle project")
+    stack = "java-gradle"
 
-# Write to GITHUB_ENV
+elif exists("package.json"):
+    print("Detected Node.js project")
+    stack = "nodejs"
+
+elif exists("angular.json"):
+    print("Detected Angular project")
+    stack = "angular"
+
+elif glob_in_root("*.py") or exists("requirements.txt") or exists("pyproject.toml"):
+    print("Detected Python project")
+    stack = "python"
+
+elif exists("app/src/main/AndroidManifest.xml"):
+    print("Detected Android project")
+    stack = "android"
+
+elif glob_in_root("*.xcodeproj") or exists("Podfile"):
+    print("Detected iOS (Swift/ObjC) project")
+    stack = "ios"
+
+elif exists("Dockerfile"):
+    print("Detected Docker project")
+    stack = "docker"
+
+print(f"Detected Stack: {stack}")
+
+# ------------------------
+# Export variable for GitHub Actions
+# ------------------------
 github_env = os.getenv("GITHUB_ENV")
 if github_env:
-    with open(github_env, "a") as f:
-        f.write(f"SNYK_CMDS={','.join(commands)}\n")
-        f.write(f"SNYK_STACK_COUNT={len(stacks)}\n")
-    print("💾 Exported SNYK_CMDS and SNYK_STACK_COUNT to GitHub environment.")
+    with open(github_env, "a") as env_file:
+        env_file.write(f"SNYK_STACK={stack}\n")
 else:
-    print("❌ GITHUB_ENV not found — unable to export commands.")
+    print("GITHUB_ENV not found")
