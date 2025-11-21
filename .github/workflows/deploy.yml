@@ -1,4 +1,5 @@
 name: CI/CD Pipeline
+
 permissions:
   contents: read
   security-events: write
@@ -24,6 +25,7 @@ env:
   MAVEN_VERSION: '3.8.6'
 
 jobs:
+
   security-scan:
     name: Snyk Analysis
     uses: ./.github/workflows/security-scanning.yml
@@ -44,13 +46,30 @@ jobs:
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
-#  evaluate-gates:
-#    needs: [ code-quality, security-scan ]
-#    name: Evaluate Gates (Enterprise)
-#    uses: ./.github/workflows/evaluate-gates.yml
-#    with:
-#      sonar-results-file: "sonarqube-cloud-scanning/results/quality-gate-result.json"
-#      snyk-results-file: "snyk-scanning/results/snyk-results.json"
-#      snyk-code-results-file: "snyk-scanning/results/snyk-code-results.json"
-#      overrides-file: "overrides/final-thresholds.json"
-#      manual-override: ${{ github.event.inputs.override_gates || 'false' }}
+  extract-jira:
+    name: Extract JIRA Key
+    runs-on: ubuntu-latest
+    outputs:
+      issue: ${{ steps.extract.outputs.issue }}
+    steps:
+      - name: Extract JIRA Key
+        id: extract
+        run: |
+          BRANCH="${GITHUB_REF##*/}"
+          ISSUE=$(echo "$BRANCH" | grep -oE '[A-Z]+-[0-9]+')
+          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+
+      - name: Show Extracted Issue
+        run: echo "Jira issue: ${{ steps.extract.outputs.issue }}"
+
+  jira-update:
+    name: Update Jira
+    needs: [ code-quality ]
+    uses: ./.github/workflows/jira.yml
+    with:
+      issue-key: ${{ github.head_ref || github.ref_name }}
+      new-status: "31"   # Transition ID de Jira
+    secrets:
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_USER: ${{ secrets.JIRA_USER }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

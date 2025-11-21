@@ -1,0 +1,40 @@
+name: Jira Integration
+
+on:
+  workflow_call:
+    inputs:
+      issue-key:
+        description: "Clave del ticket Jira (ej: KAN-123)"
+        required: true
+        type: string
+
+      new-status:
+        description: "Estado Jira al que quieres mover el ticket"
+        required: true
+        type: string
+        default: "In Progress"
+
+    secrets:
+      JIRA_URL:
+        required: true
+      JIRA_USER:
+        required: true
+      JIRA_API_TOKEN:
+        required: true
+
+jobs:
+  update-jira:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Jira Ticket
+        run: |
+          echo "📌 Updating Jira issue: ${{ inputs.issue-key }}"
+          echo "➡️ Target status: ${{ inputs.new-status }}"
+
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -u "${{ secrets.JIRA_USER }}:${{ secrets.JIRA_API_TOKEN }}" \
+            -d "{
+              \"transition\": { \"id\": \"${{ inputs.new-status }}\" }
+            }" \
+            "${{ secrets.JIRA_URL }}/rest/api/3/issue/${{ inputs.issue-key }}/transitions"
