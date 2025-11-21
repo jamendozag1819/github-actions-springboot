@@ -9,10 +9,10 @@ on:
         type: string
 
       new-status:
-        description: "Estado Jira al que quieres mover el ticket"
-        required: true
+        description: "ID de la transición Jira (no el nombre)"
+        required: false
         type: string
-        default: "In Progress"
+        default: ""
 
     secrets:
       JIRA_URL:
@@ -23,13 +23,47 @@ on:
         required: true
 
 jobs:
-  update-jira:
+
+  get-transitions:
+    name: Get Jira Transitions
     runs-on: ubuntu-latest
+    outputs:
+      transitions: ${{ steps.fetch.outputs.transitions }}
     steps:
-      - name: Update Jira Ticket
+      - name: Fetch available Jira transitions
+        id: fetch
         run: |
-          echo "Updating Jira issue: ${{ inputs.issue-key }}"
-          echo "Target status: ${{ inputs.new-status }}"
+          echo "🔍 Getting transitions for issue ${ISSUE_KEY}"
+          ISSUE_KEY="${{ inputs.issue-key }}"
+
+          RESPONSE=$(curl -s -u "${{ secrets.JIRA_USER }}:${{ secrets.JIRA_API_TOKEN }}" \
+            -H "Accept: application/json" \
+            "${{ secrets.JIRA_URL }}/rest/api/3/issue/$ISSUE_KEY/transitions")
+
+          echo "Transitions found:"
+          echo "$RESPONSE"
+
+          # Export transitions to output
+          echo "transitions<<EOF" >> $GITHUB_OUTPUT
+          echo "$RESPONSE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+
+  update-jira:
+    name: Update Jira Ticket
+    runs-on: ubuntu-latest
+    needs: get-transitions
+    steps:
+      - name: Show available transitions
+        run: |
+          echo "📋 Available transitions for issue ${{ inputs.issue-key }}:"
+          echo "${{ needs.get-transitions.outputs.transitions }}"
+
+      - name: Update Jira Ticket Status
+        if: ${{ inputs.new-status != '' }}
+        run: |
+          echo "📌 Updating Jira issue: ${{ inputs.issue-key }}"
+          echo "➡️ Target transition ID: ${{ inputs.new-status }}"
 
           curl -X POST \
             -H "Content-Type: application/json" \
