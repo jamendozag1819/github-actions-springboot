@@ -109,7 +109,7 @@ jobs:
           echo "Running: $SNYK_CMD"
           $SNYK_CMD \
             --org="${SNYK_ORG_ID}" \
-            --json-file-output="snyk-scanning/results/snyk-results-backend.json" \
+            --json-file-output="snyk-scanning/results/snyk-results.json" \
             --token="${SNYK_TOKEN}" || true
 
       # Summary (Backend)
@@ -117,7 +117,7 @@ jobs:
         id: security-summary-backend
         uses: ./.github/actions/generate-security-summary
         with:
-          results-file: snyk-scanning/results/snyk-results-backend.json
+          results-file: snyk-scanning/results/snyk-results.json
 
       # Upload artifacts (Backend)
       - name: Upload security scan results (Backend)
@@ -125,7 +125,7 @@ jobs:
         with:
           name: security-results
           path: |
-            snyk-scanning/results/snyk-results-backend.json
+            snyk-scanning/results/snyk-results.json
             snyk-scanning/results/snyk-code-results.json
           if-no-files-found: warn
           retention-days: 3
