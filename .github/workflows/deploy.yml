@@ -26,7 +26,6 @@ env:
 
 jobs:
   load-overrides:
-    needs: build
     name: Load Developer Overrides
     uses: ./.github/workflows/load-overrides.yml
 
