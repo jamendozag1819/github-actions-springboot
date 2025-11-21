@@ -22,6 +22,11 @@ on:
         required: false
         type: boolean
         default: false
+      stack:
+        description: "Detected technology stack"
+        required: true
+        type: string
+
         
     outputs:
       tests-passed:
@@ -69,9 +74,6 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
           
-      - name: Download build artifacts
-        uses: ./.github/actions/download-build-artifacts
-        continue-on-error: true
         
       - name: Verify build prerequisites
         run: |
@@ -95,41 +97,72 @@ jobs:
             echo "⚠️ No test sources found in src/test/java"
           fi
 
-      - name: Run Unit Tests
-        id: run_tests
-        continue-on-error: true
-        run: |
-          
-          # Set test profile if specified
-          PROFILE_ARG=""
-          if [ "${{ inputs.test-profile }}" != "default" ]; then
-            PROFILE_ARG="-P${{ inputs.test-profile }}"
-            echo "📋 Using test profile: ${{ inputs.test-profile }}"
-          fi
-          
-          # Run tests with coverage
-          echo "🚀 Executing: mvn test jacoco:report $PROFILE_ARG"
-          mvn test jacoco:report $PROFILE_ARG \
-            -Dmaven.test.failure.ignore=false \
-            -Djacoco.skip=false || TEST_EXIT_CODE=$?
-          
-          # Store exit code for later evaluation
-          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
-          
-          # Show test execution summary
-          echo ""
-          echo "📊 Test Execution Summary:"
-          if [ -d "target/surefire-reports" ]; then
-            echo "   JUnit reports: $(ls target/surefire-reports/*.xml 2>/dev/null | wc -l) files"
-          fi
-          if [ -f "target/site/jacoco/jacoco.xml" ]; then
-            echo "   JaCoCo coverage: Generated"
-            echo "   Coverage report size: $(du -h target/site/jacoco/jacoco.xml | cut -f1)"
-          else
-            echo "   JaCoCo coverage: Not generated"
-          fi
-          
-          exit ${TEST_EXIT_CODE:-0}
+		  - name: Run Unit Tests
+		    id: run_tests
+		    continue-on-error: true
+		    run: |
+		      STACK="${{ inputs.stack }}"
+		      echo "🔍 Detected stack for tests: $STACK"
+
+		      mkdir -p test-results
+
+		      # -------------------------
+		      # JAVA / MAVEN
+		      # -------------------------
+		      if [ "$STACK" = "java-maven" ]; then
+		        PROFILE_ARG=""
+		        if [ "${{ inputs.test-profile }}" != "default" ]; then
+		          PROFILE_ARG="-P${{ inputs.test-profile }}"
+		        fi
+
+		        echo "🚀 Running Maven tests..."
+		        mvn test jacoco:report $PROFILE_ARG \
+		          -Dmaven.test.failure.ignore=false \
+		          -Djacoco.skip=false || TEST_EXIT_CODE=$?
+
+		        cp -r target/surefire-reports/* test-results/ || true
+		        cp -r target/site/jacoco/* test-results/ || true
+		      fi
+
+		      # -------------------------
+		      # JAVA / GRADLE
+		      # -------------------------
+		      if [ "$STACK" = "java-gradle" ]; then
+		        echo "🚀 Running Gradle tests..."
+		        ./gradlew test || TEST_EXIT_CODE=$?
+
+		        cp -r build/test-results/test/* test-results/ || true
+		        cp -r build/reports/* test-results/ || true
+		      fi
+
+		      # -------------------------
+		      # NODE / ANGULAR
+		      # -------------------------
+		      if [ "$STACK" = "nodejs" ] || [ "$STACK" = "angular" ]; then
+		        echo "📦 Installing Node dependencies..."
+		        npm install
+
+		        echo "🚀 Running Node/Angular tests..."
+		        npm test || TEST_EXIT_CODE=$?
+
+		        cp -r coverage/* test-results/ || true
+		      fi
+
+		      # -------------------------
+		      # PYTHON
+		      # -------------------------
+		      if [ "$STACK" = "python" ]; then
+		        pip install -r requirements.txt || true
+		        pytest --junitxml=test-results/results.xml || TEST_EXIT_CODE=$?
+		      fi
+
+		      echo "TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+
+		      echo "📊 Collected test results:"
+		      ls -R test-results || true
+
+		      exit ${TEST_EXIT_CODE:-0}
+
 
       - name: Process test results
         id: process_results
