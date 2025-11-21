@@ -53,10 +53,6 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
 
-      # Download artifacts
-      - name: Download build artifacts
-        uses: ./.github/actions/download-build-artifacts
-        continue-on-error: true
 
       # Detect tech stack (Backend)
       - name: Detect technology stack (Backend)
