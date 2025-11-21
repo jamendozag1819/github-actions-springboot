@@ -40,6 +40,8 @@ jobs:
       sonar-gate-exit-code: ${{ steps.sonar_scan.outputs.sonar_gate_exit_code }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Run Sonar Code Analysis (Composite Action)
         id: sonar_scan
