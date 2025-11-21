@@ -60,7 +60,8 @@ jobs:
           echo "issue=$ISSUE" >> $GITHUB_OUTPUT
 
       - name: Show Extracted Issue
-        run: echo "Jira issue: ${{ steps.extract.outputs.issue }}"
+        run: |
+         echo "Jira issue: ${{ steps.extract.outputs.issue }}"
 
   jira-update:
     name: Update Jira
