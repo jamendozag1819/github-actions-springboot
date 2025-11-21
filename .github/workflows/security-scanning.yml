@@ -76,7 +76,9 @@ jobs:
           python3 ./scripts/snyk-tech.py
 
       - name: Show detected stacks
-        run: echo "Detected stacks: $SNYK_STACKS"
+        shell: bash
+        run: |
+         echo "Detected stacks: $SNYK_STACKS"
 
       # --------------------------
       # Map stack → CLI command
@@ -90,7 +92,9 @@ jobs:
           echo "Resolved command: $SNYK_CMD"
 
       - name: Show Snyk command
-        run: echo "Final Snyk command: $SNYK_CMD"
+        shell: bash
+        run: |
+         echo "Detected stacks: $SNYK_STACKS"
 
       # --------------------------
       # Run Snyk Code (Backend)
