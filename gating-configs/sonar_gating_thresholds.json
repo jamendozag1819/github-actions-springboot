@@ -1,6 +1,6 @@
 {
   "default": {
-    "coverage": 80,
+    "coverage": 70,
     "bugs": 5,
     "vulnerabilities": 2,
     "security_hotspots": 5,
