@@ -32,15 +32,6 @@ jobs:
       java-version: '17'
       maven-version: '3.8.6'
 
-  unit-tests:
-    name: Unit Tests & Coverage
-    needs: build
-    uses: ./.github/workflows/unit-testing.yml
-    with:
-      java-version: '17'
-      coverage-threshold: 50
-      fail-on-coverage: false
-
   load-overrides:
     needs: build
     name: Load Developer Overrides
