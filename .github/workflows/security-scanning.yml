@@ -30,6 +30,9 @@ on:
       low-count:
         description: "Number of low vulnerabilities found"
         value: ${{ jobs.security-scan.outputs.low-count }}
+      stack:
+        description: "Detected technology stack"
+        value: ${{ jobs.security-scan.outputs.stack }}
 
 jobs:
   security-scan:
@@ -41,6 +44,8 @@ jobs:
       high-count: ${{ steps.security-summary-backend.outputs.high-count }}
       medium-count: ${{ steps.security-summary-backend.outputs.medium-count }}
       low-count: ${{ steps.security-summary-backend.outputs.low-count }}
+      stack: ${{ steps.detect-stack-backend.outputs.stack }}
+        
 
     steps:
       # Checkout
@@ -61,6 +66,7 @@ jobs:
         run: |
           chmod +x ./scripts/snyk-tech.py
           python3 ./scripts/snyk-tech.py
+          echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
 
       - name: Show detected stacks (Backend)
         shell: bash
@@ -117,7 +123,7 @@ jobs:
       - name: Upload security scan results (Backend)
         uses: actions/upload-artifact@v4
         with:
-          name: security-results-backend
+          name: security-results
           path: |
             snyk-scanning/results/snyk-results-backend.json
             snyk-scanning/results/snyk-code-results.json

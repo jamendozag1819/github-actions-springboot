@@ -40,6 +40,7 @@ jobs:
   
   code-quality:
     name: SonarQube Cloud Analysis
+    needs: [ security-scan ]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: '17'
