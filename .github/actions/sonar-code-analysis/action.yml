@@ -1,0 +1,125 @@
+name: "Sonar Scan"
+description: "Run SonarCloud scan and validate quality gate"
+
+inputs:
+  app-path:
+    description: "Path of the project to scan"
+    required: true
+  sonar-host-url:
+    description: "URL of the SonarCloud server"
+    required: true
+  tech-version:
+    description: "Node.js or Java version"
+    required: true
+  project-path:
+    description: "Path to the project"
+    required: true
+  sonar-token:
+    description: "SonarCloud token"
+    required: true
+  sonar-organization:
+    description: "SonarCloud organization key"
+    required: true
+  sonar-project-key:
+    description: "SonarCloud project key"
+    required: true
+  sonar-branch:
+    description: "Branch name for Sonar scan"
+    required: false
+  app-techstack:
+    description: "auto, nodejs, java, etc."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: "temurin"
+        java-version: "17"
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+
+    - name: Setup Node (for sonar-scanner)
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18"
+
+    - name: Install Sonar Scanner
+      shell: bash
+      run: npm install -g sonar-scanner
+
+    - name: Sonar Env Info
+      shell: bash
+      run: |
+        echo "Sonar Scan Configuration:"
+        echo "App Path: ${{ inputs.app-path }}"
+        echo "Sonar Host URL: ${{ inputs.sonar-host-url }}"
+        echo "Organization: ${{ inputs.sonar-organization }}"
+        echo "Project Key: ${{ inputs.sonar-project-key }}"
+        echo "Tech Stack: ${{ inputs.app-techstack }}"
+
+    - name: Detect Project Tech Stack
+      shell: bash
+      run: |
+        cd "${{ inputs.app-path }}"
+        python3 scripts/sonar-tech.py
+
+    - name: Generate Properties
+      shell: bash
+      run: |
+        cd "${{ inputs.app-path }}"
+        echo "Generating properties using: $SONAR_PROPS"
+
+        > sonar-project.properties
+
+        IFS=',' read -ra FILES <<< "$SONAR_PROPS"
+        for f in "${FILES[@]}"; do
+          echo "Adding $f"
+          cat "$f" >> sonar-project.properties
+          echo "" >> sonar-project.properties
+        done
+
+        echo "Generated sonar-project.properties:"
+        cat sonar-project.properties
+
+    - name: Sonar Scan
+      shell: bash
+      env:
+       SONAR_TOKEN: ${{ inputs.sonar-token }}
+      continue-on-error: true
+      run: |
+       cd "${{ inputs.app-path }}"
+       sonar-scanner \
+       -Dsonar.host.url=${{ inputs.sonar-host-url }} \
+       -Dsonar.login=${{ inputs.sonar-token }} \
+       -Dsonar.organization=${{ inputs.sonar-organization }} \
+       -Dsonar.projectKey=${{ inputs.sonar-project-key }} \
+       -Dsonar.projectBaseDir="${{ inputs.app-path }}" \
+       -Dsonar.sources="${{ inputs.project-path }}" \
+       -Dsonar.branch.name="${{ inputs.sonar-branch }}" \
+       -Dsonar.qualitygate.wait=true \
+       -Dsonar.qualitygate.timeout=300 \
+       || SONAR_EXIT_CODE=$?
+
+
+    - name: Validate Quality Gate
+      shell: bash
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+      continue-on-error: true
+      run: |
+        echo "Running Sonar gating..."
+        cd "${{ inputs.app-path }}"
+        python3 "./.github/actions/sonar-code-analysis/sonar_gating.py" \
+          --sonar-host "${{ inputs.sonar-host-url }}" \
+          --token "${{ inputs.sonar-token }}" \
+          --project-key "${{ inputs.sonar-project-key }}" \
+          --threshold-file "./gating-configs/sonar_gating_thresholds.json" \
+          --branch "${{ inputs.sonar-branch }}" \
+          --wait
