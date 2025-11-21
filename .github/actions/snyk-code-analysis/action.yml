@@ -41,7 +41,7 @@ runs:
       shell: bash
       run: |
         cd ${{ inputs.app-path }}
-        python3 scripts/snyk-tech.py
+        python3 /home/runner/work/github-actions-springboot/github-actions-springboot/scripts/snyk-tech.py
         echo "Detected stack: $SNYK_STACK"
 
     - name: Resolve Snyk Command (Python)
@@ -76,8 +76,6 @@ runs:
        SNYK_API_URL: "https://api.snyk.io"
       run: |
         cd ${{ inputs.app-path }}
-        pwd
-        ls -al
         echo "Running: $SNYK_CMD"
         chmod +x ./mvnw
         $SNYK_CMD \
