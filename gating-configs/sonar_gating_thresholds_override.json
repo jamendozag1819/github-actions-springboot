@@ -1,0 +1,13 @@
+{
+  "default": {
+    "coverage": 70,
+    "bugs": 5,
+    "vulnerabilities": 2,
+    "security_hotspots": 5,
+    "code_smells": 50,
+    "duplicated_lines_density": 5,
+    "security_rating": 2,
+    "reliability_rating": 2,
+    "sqale_rating": 1
+  }
+}

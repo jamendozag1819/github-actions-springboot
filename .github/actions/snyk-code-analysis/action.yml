@@ -83,7 +83,7 @@ runs:
           --json-file-output=snyk-report.json \
           --token="${SNYK_TOKEN}" \
           --api="${SNYK_API_URL}"
-
+        echo 'snyk-report.json'
         cat snyk-report.json
 
     - name: Snyk Gating

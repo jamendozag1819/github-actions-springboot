@@ -120,6 +120,6 @@ runs:
           --sonar-host "${{ inputs.sonar-host-url }}" \
           --token "${{ inputs.sonar-token }}" \
           --project-key "${{ inputs.sonar-project-key }}" \
-          --threshold-file "./gating-configs/sonar_gating_thresholds.json" \
+          --threshold-file "./gating-configs/sonar_gating_thresholds_default.json" \
           --branch "${{ inputs.sonar-branch }}" \
           --wait
