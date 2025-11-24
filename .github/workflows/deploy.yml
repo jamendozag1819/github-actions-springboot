@@ -46,32 +46,80 @@ jobs:
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
-  extract-jira:
-    name: Extract JIRA Key
+  gate-evaluator:
+    name: Evaluate Cloud-Native Gates
+    needs: [ security-scan, code-quality ]
     runs-on: ubuntu-latest
-    outputs:
-      issue: ${{ steps.extract.outputs.issue }}
+
     steps:
-      - name: Extract JIRA Key
-        id: extract
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Security Results
+        uses: actions/download-artifact@v4
+        with:
+          name: security-results
+          path: gating/security
+
+      - name: Download Quality Results
+        uses: actions/download-artifact@v4
+        with:
+          name: quality-results
+          path: gating/quality
+
+      - name: Extract Results
         run: |
-          BRANCH="${GITHUB_REF##*/}"
-          ISSUE=$(echo "$BRANCH" | grep -oE '[A-Z]+-[0-9]+')
-          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+          mkdir -p gating/security/unzipped
+          mkdir -p gating/quality/unzipped
 
-      - name: Show Extracted Issue
+          unzip -o gating/security/security-results.zip -d gating/security/unzipped
+          unzip -o gating/quality/quality-results.zip -d gating/quality/unzipped
+
+      - name: Run Gate Evaluator (Python)
         run: |
-          echo "Jira issue: ${{ steps.extract.outputs.issue }}"
+         python gate/gate_evaluator.py \
+         --snyk gating/security/unzipped \
+         --sonar gating/quality/unzipped \
+         --thresholds thresholds.json \
+         --params gating/quality/sonar-params.json \
+         --output gating/gate-result.json \
+         --target ${{ env.TARGET_ENVIRONMENT }} \
+         --ref ${{ github.ref }}
 
 
-  jira-update:
-    name: Update Jira
-    needs: [ code-quality, extract-jira ]
-    uses: ./.github/workflows/jira.yml
-    with:
-      issue-key: ${{ needs.extract-jira.outputs.issue }}
-      new-status: "31"
-    secrets:
-      JIRA_URL: ${{ secrets.JIRA_URL }}
-      JIRA_USER: ${{ secrets.JIRA_USER }}
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      - name: Upload Gate Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-result
+          path: gating/gate-result.json
+
+
+#  extract-jira:
+#    name: Extract JIRA Key
+#    runs-on: ubuntu-latest
+#    outputs:
+#      issue: ${{ steps.extract.outputs.issue }}
+#    steps:
+#      - name: Extract JIRA Key
+#        id: extract
+#        run: |
+#          BRANCH="${GITHUB_REF##*/}"
+#          ISSUE=$(echo "$BRANCH" | grep -oE '[A-Z]+-[0-9]+')
+#          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+#
+#      - name: Show Extracted Issue
+#        run: |
+#          echo "Jira issue: ${{ steps.extract.outputs.issue }}"
+#
+#
+#  jira-update:
+#    name: Update Jira
+#    needs: [ code-quality, extract-jira ]
+#    uses: ./.github/workflows/jira.yml
+#    with:
+#      issue-key: ${{ needs.extract-jira.outputs.issue }}
+#      new-status: "31"
+#    secrets:
+#      JIRA_URL: ${{ secrets.JIRA_URL }}
+#      JIRA_USER: ${{ secrets.JIRA_USER }}
+#      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
