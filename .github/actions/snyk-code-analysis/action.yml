@@ -92,6 +92,6 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: security-results
-        path: snyk-scanning/results
+        path: ./snyk-scanning/results/snyk-report.json
         if-no-files-found: warn
         retention-days: 3
