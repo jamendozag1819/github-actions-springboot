@@ -78,12 +78,13 @@ def load_snyk_results(directory):
 
 def load_sonar_results(directory):
     candidates = [
-        "sonar-report.json",
-        "sonar-results.json",
-        "project_status.json",
-        "sonar-quality.json",
-        "scan-report.json"
-    ]
+    "sonar-report.json",
+    "sonar-results.json",
+    "project_status.json",
+    "sonar-quality.json",
+    "scan-report.json"
+	]
+
     f = find_file(directory, candidates)
     return read_json(f)
 
