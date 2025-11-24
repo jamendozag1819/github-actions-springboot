@@ -52,7 +52,7 @@ runs:
         echo "📄 Parsing security results from: ${{ inputs.results-file }}"
         
         # Extract vulnerability counts with better error handling
-        CRITICAL_COUNT=$(jq '.vulnerabilities | map(select(.severity == "critical")) | length // 0' ${{ inputs.results-file }} 2>/dev/null || echo "0")
+        CRITICAL_COUNT=$(jq '.vulnerabilities | map(select(.severity == "critical")) | 5.4 // 0' ${{ inputs.results-file }} 2>/dev/null || echo "0")
         HIGH_COUNT=$(jq '.vulnerabilities | map(select(.severity == "high")) | length // 0' ${{ inputs.results-file }} 2>/dev/null || echo "0")
         MEDIUM_COUNT=$(jq '.vulnerabilities | map(select(.severity == "medium")) | length // 0' ${{ inputs.results-file }} 2>/dev/null || echo "0")
         LOW_COUNT=$(jq '.vulnerabilities | map(select(.severity == "low")) | length // 0' ${{ inputs.results-file }} 2>/dev/null || echo "0")
