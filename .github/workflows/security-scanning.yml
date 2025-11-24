@@ -123,14 +123,3 @@ jobs:
         uses: ./.github/actions/generate-security-summary
         with:
           results-file: snyk-scanning/results/snyk-results.json
-
-      # Upload artifacts (Backend)
-      - name: Upload security scan results (Backend)
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-results
-          path: |
-            snyk-scanning/results/snyk-results.json
-            snyk-scanning/results/snyk-code-results.json
-          if-no-files-found: warn
-          retention-days: 3
