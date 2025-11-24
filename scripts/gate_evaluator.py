@@ -11,8 +11,8 @@ def main():
         sys.exit(1)
 
     file_path = sys.argv[1]
-	print("### File: ")
-	print(file_path)
+    print("### File: ")
+    print(file_path)
     with open(file_path, "r") as f:
         data = json.load(f)
 
