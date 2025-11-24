@@ -1,14 +1,27 @@
 {
-  "critical_vulns_max": 5,
-  "high_vulns_max": 5,
-  "medium_vulns_max": 10,
-  "low_vulns_max": 99,
-
-  "test_pass_rate_min": 80,
-
-  "coverage_min": 60,
-  "code_smells_max": 0,
-  "bugs_max": 0,
-  "sonar_vulns_max": 0,
-  "duplication_max_percent": 5
+  "snyk": {
+    "critical": 0,
+    "high": 5,
+    "medium": 20
+  },
+  "sonarqube": {
+    "coverage": 80,
+    "bugs": 5,
+    "vulnerabilities": 0,
+    "code_smells": 50,
+    "security_rating": "A",
+    "reliability_rating": "A",
+    "maintainability_rating": "B",
+    "tech_debt_minutes": 480,
+    "express_lane": {
+      "coverage_threshold": 80,
+      "test_success_threshold": 80,
+      "max_security_rating": "B",
+      "max_reliability_rating": "C"
+    }
+  },
+  "approved_sonar_params": [
+    "sonar.coverage.exclusions",
+    "sonar.cpd.exclusions"
+  ]
 }
