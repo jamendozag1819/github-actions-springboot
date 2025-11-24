@@ -83,7 +83,7 @@ jobs:
           name: gate-result
           path: gating/gate-result.json
 
-    gate-report:
+  gate-report:
     name: Gate Compliance Report
     needs: [ gate-evaluator ]
     runs-on: ubuntu-latest
