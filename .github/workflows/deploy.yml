@@ -37,7 +37,6 @@ jobs:
 
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [ security-scan ]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: "17"
@@ -69,7 +68,7 @@ jobs:
 
       - name: Normalize Sonar Result Filename
         run: |
-         FILE=$(ls gating/quality/*.json | head -n 1)
+           FILE=$(ls gating/quality/*.json | head -n 1)
            echo "Detected sonar file: $FILE"
            mv "$FILE" gating/quality/sonar-results.json
 
