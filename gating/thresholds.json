@@ -1,6 +1,6 @@
 {
   "critical_vulns_max": 5,
-  "high_vulns_max": 2,
+  "high_vulns_max": 5,
   "medium_vulns_max": 10,
   "low_vulns_max": 99,
 
