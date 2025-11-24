@@ -6,23 +6,23 @@ permissions:
 
 on:
   push:
-    branches: [ main, '*release*' ]
+    branches: [ main, "*release*" ]
   pull_request:
-    branches: [ main, '*release*' ]
+    branches: [ main, "*release*" ]
   workflow_dispatch:
     inputs:
       override_gates:
-        description: 'Anulación de la puerta de despliegue seguro (solo para despliegue de emergencia)'
+        description: "Anulación de la puerta de despliegue seguro (solo para despliegue de emergencia)"
         required: false
-        default: 'false'
+        default: "false"
         type: choice
         options:
-          - 'false'
-          - 'true'
+          - "false"
+          - "true"
 
 env:
-  JAVA_VERSION: '17'
-  MAVEN_VERSION: '3.8.6'
+  JAVA_VERSION: "17"
+  MAVEN_VERSION: "3.8.6"
 
 jobs:
 
@@ -30,7 +30,7 @@ jobs:
     name: Snyk Analysis
     uses: ./.github/workflows/security-scanning.yml
     with:
-      java-version: '17'
+      java-version: "17"
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
@@ -40,7 +40,7 @@ jobs:
     needs: [ security-scan ]
     uses: ./.github/workflows/quality-analysis.yml
     with:
-      java-version: '17'
+      java-version: "17"
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
@@ -58,26 +58,24 @@ jobs:
       - name: Download Snyk artifact
         uses: actions/download-artifact@v4
         with:
-         name: security-results
-         path: gating/security
+          name: security-results
+          path: gating/security
 
       - name: Download Sonar artifact
         uses: actions/download-artifact@v4
         with:
-         name: quality-results
-         path: gating/quality
+          name: quality-results
+          path: gating/quality
 
       - name: Run Gate Evaluator (Python)
         run: |
           python scripts/gate_evaluator.py \
-          --snyk gating/security \
-          --sonar gating/quality \
-          --thresholds gating/thresholds.json \
-          --output gating/gate-result.json \
-          --ref "${{ github.ref }}" \
-          --target "${{ env.TARGET_ENVIRONMENT }}"
-
-
+            --snyk gating/security \
+            --sonar gating/quality \
+            --thresholds gating/thresholds.json \
+            --output gating/gate-result.json \
+            --ref "${{ github.ref }}" \
+            --target "${{ env.TARGET_ENVIRONMENT }}"
 
       - name: Upload Gate Result
         uses: actions/upload-artifact@v4
@@ -85,33 +83,62 @@ jobs:
           name: gate-result
           path: gating/gate-result.json
 
+  gate-report:
+    name: Gate Compliance Report
+    needs: [ gate-evaluator ]
+    runs-on: ubuntu-latest
 
-#  extract-jira:
-#    name: Extract JIRA Key
-#    runs-on: ubuntu-latest
-#    outputs:
-#      issue: ${{ steps.extract.outputs.issue }}
-#    steps:
-#      - name: Extract JIRA Key
-#        id: extract
-#        run: |
-#          BRANCH="${GITHUB_REF##*/}"
-#          ISSUE=$(echo "$BRANCH" | grep -oE '[A-Z]+-[0-9]+')
-#          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
-#
-#      - name: Show Extracted Issue
-#        run: |
-#          echo "Jira issue: ${{ steps.extract.outputs.issue }}"
-#
-#
-#  jira-update:
-#    name: Update Jira
-#    needs: [ code-quality, extract-jira ]
-#    uses: ./.github/workflows/jira.yml
-#    with:
-#      issue-key: ${{ needs.extract-jira.outputs.issue }}
-#      new-status: "31"
-#    secrets:
-#      JIRA_URL: ${{ secrets.JIRA_URL }}
-#      JIRA_USER: ${{ secrets.JIRA_USER }}
-#      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Gate Result
+        uses: actions/download-artifact@v4
+        with:
+          name: gate-result
+          path: gating
+
+      - name: Display Gate Table
+        id: display-table
+        run: |
+          echo "## 🛡️ Cloud-Native Gates Evaluation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "| Gate ID | Name | Category | Strength | Data Source | Override Support | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|----------|----------|-------------|------------------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          python3 << 'EOF'
+          import json
+
+          with open("gating/gate-result.json") as f:
+          data = json.load(f)
+
+          gate_info = {
+          "gatr-01": ("High Vulnerability", "Security", "NON_ENFORCING", "Snyk", "Yes"),
+          "gatr-02": ("Medium Vulnerability", "Security", "NON_ENFORCING", "Snyk", "Yes"),
+          "gatr-03": ("Critical Vulnerability", "Security", "NON_ENFORCING", "Snyk", "Yes"),
+          "gatr-07": ("Developer Thresholds", "Quality", "NON_ENFORCING", "SonarQube", "Yes"),
+          "gatr-08": ("Code Quality", "Quality", "ENFORCING", "SonarQube", "Yes"),
+          "gatr-09": ("Approved Sonar Params", "Quality", "ENFORCING", "GitHub Actions", "No"),
+          "gatr-10": ("Express Lane Quality", "Quality", "NON_ENFORCING", "SonarQube", "Yes"),
+          "gatr-14": ("Release Branch", "Governance", "ENFORCING", "GitHub Actions", "No"),
+          }
+
+          for g in data["gates"]:
+            gid = g["id"]
+            label = gate_info.get(gid, ("Unknown", "Unknown", "Unknown", "Unknown", "Unknown"))
+            print(f"| {gid} | {label[0]} | {label[1]} | {label[2]} | {label[3]} | {label[4]} | {g['status']} |")
+          EOF
+          >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if gate failed
+        run: |
+          FINAL=$(jq -r '.final_decision' gating/gate-result.json)
+          echo "Final decision: $FINAL"
+
+          if [ "$FINAL" = "FAIL" ]; then
+            echo "❌ Gate enforcement failed — blocking merge"
+            exit 1
+          else
+            echo "✅ Gates passed or warn — merge allowed"
+          fi
