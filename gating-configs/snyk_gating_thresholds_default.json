@@ -1,7 +1,7 @@
 {
   "default": {
-    "critical": 4,
-    "high": 4,
+    "critical": 0,
+    "high": 5,
     "medium": 20,
     "low": 100
   }

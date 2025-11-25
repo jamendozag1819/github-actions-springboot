@@ -211,6 +211,15 @@ def evaluate_sonar(sonar_json, t, used_params):
     if code_smells is not None and code_smells > t["sonarqube"]["code_smells"]:
         issues.append(f"Code smells {code_smells} > {t['sonarqube']['code_smells']}")
 
+    if security_rating is not None and security_rating == t["sonarqube"]["security_rating"]:
+        issues.append(f"Code smells {security_rating} > {t['sonarqube']['security_rating']}")
+
+    if maintainability_rating is not None and maintainability_rating == t["sonarqube"]["maintainability_rating"]:
+        issues.append(f"Code smells {maintainability_rating} > {t['sonarqube']['maintainability_rating']}")
+
+    if reliability_rating is not None and reliability_rating == t["sonarqube"]["reliability_rating"]:
+        issues.append(f"Code smells {reliability_rating} > {t['sonarqube']['reliability_rating']}")
+
     results.append({
         "id": "gatr-07",
         "status": "PASS" if not issues else "WARN",
