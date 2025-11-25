@@ -9,10 +9,14 @@ stack = "unknown"
 def exists(path):
     return os.path.exists(path)
 
-if exists("pom.xml"):
+if exists("Dockerfile"):
+    print("Detected Docker project")
+    stack = "docker"
+    
+elif exists("pom.xml"):
     print("Detected Maven project")
     stack = "java-maven"
-
+    
 elif exists("build.gradle") or exists("build.gradle.kts"):
     print("Detected Gradle project")
     stack = "java-gradle"
@@ -37,9 +41,6 @@ elif glob.glob("*.xcodeproj") or exists("Podfile"):
     print("Detected iOS (Swift/ObjC) project")
     stack = "ios"
 
-elif exists("Dockerfile"):
-    print("Detected Docker project")
-    stack = "docker"
 
 print(f"Detected Stack: {stack}")
 

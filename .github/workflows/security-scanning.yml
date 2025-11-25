@@ -1,48 +1,34 @@
-# -------------------------------------------------------------
-#  WORKFLOW: Security Scanning
-#  Descripción:
-#    - Detecta el stack tecnológico del proyecto.
-#    - Mapea el comando Snyk adecuado según el stack.
-#    - Ejecuta Snyk Code (SAST) y Snyk Test (SCA).
-#    - Genera resúmenes de vulnerabilidades.
-#    - Expone métricas que pueden ser usadas en workflows
-#      posteriores (por ejemplo, para Gating de calidad).
-# -------------------------------------------------------------
-
 name: "Security Scanning"
-
-# Permisos mínimos requeridos para lectura del repo
-# y reporte de eventos de seguridad
 permissions:
   contents: read
   security-events: write
 
-# Este workflow es reutilizable (workflow_call)
 on:
   workflow_call:
     inputs:
       java-version:
-        description: "Versión de Java a utilizar"
+        description: "Java version to use"
         required: false
         type: string
         default: "17"
-
-    # Secretos obligatorios para ejecutar Snyk
     secrets:
       SNYK_TOKEN:
         required: true
       SNYK_ORG_ID:
         required: true
 
-# -------------------------------------------------------------
-#  JOB PRINCIPAL: security-scan
-# -------------------------------------------------------------
+    outputs:
+      critical-count: ${{ jobs.security-scan.outputs.critical-count }}
+      high-count:     ${{ jobs.security-scan.outputs.high-count }}
+      medium-count:   ${{ jobs.security-scan.outputs.medium-count }}
+      low-count:      ${{ jobs.security-scan.outputs.low-count }}
+      stack:          ${{ jobs.security-scan.outputs.stack }}
+
 jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
 
-    # Outputs del job (consumidos por workflow padre)
     outputs:
       critical-count: ${{ steps.security-summary-backend.outputs.critical-count }}
       high-count:     ${{ steps.security-summary-backend.outputs.high-count }}
@@ -52,22 +38,36 @@ jobs:
 
     steps:
 
-      # ---------------------------------------------------------
-      # 1. Descargar código del repositorio
-      # ---------------------------------------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ---------------------------------------------------------
-      # 2. Configurar Java y Maven (acción personalizada)
-      # ---------------------------------------------------------
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
 
+      # -----------------------------------------
+      # Detect Stack
+      # -----------------------------------------
+      - name: Detect technology stack (Backend)
+        id: detect-stack-backend
+        shell: bash
+        run: |
+          chmod +x ./scripts/snyk-tech.py
+          python3 ./scripts/snyk-tech.py
 
+          echo "Detected SNYK_STACK=$SNYK_STACK"
+          echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
+
+      - name: Show detected stack
+        shell: bash
+        run: echo "Detected: $SNYK_STACK"
+
+      # -----------------------------------------
+      # IF STACK == DOCKER → SOLO CONTENEDORES
+      # -----------------------------------------
       - name: Snyk Container Test
+        if: steps.detect-stack-backend.outputs.stack == 'docker'
         run: |
           snyk container test myapp:${{ github.sha }} \
             --file=Dockerfile \
@@ -76,17 +76,61 @@ jobs:
             --token=${{ secrets.SNYK_TOKEN }} || true
 
       - name: Snyk Container Monitor
-        if: github.ref == 'refs/heads/main'
+        if: steps.detect-stack-backend.outputs.stack == 'docker' && github.ref == 'refs/heads/main'
         run: |
           snyk container monitor myapp:${{ github.sha }} \
             --file=Dockerfile \
             --org=${{ secrets.SNYK_ORG_ID }} \
             --token=${{ secrets.SNYK_TOKEN }} || true
 
-      - name: Upload security results
-        uses: actions/upload-artifact@v4
+      # -----------------------------------------
+      # ELSE → SAST + SCA (BACKEND NORMAL)
+      # -----------------------------------------
+      - name: Map Snyk command (Backend)
+        if: steps.detect-stack-backend.outputs.stack != 'docker'
+        id: map-command-backend
+        shell: bash
+        run: |
+          chmod +x ./scripts/snyk-command-map.py
+          python3 ./scripts/snyk-command-map.py
+          echo "Resolved command: $SNYK_CMD"
+
+      - name: Run Snyk Code (SAST Backend)
+        if: steps.detect-stack-backend.outputs.stack != 'docker'
+        id: snyk-code-backend
+        uses: ./.github/actions/snyk-code-analysis
         with:
-          name: security-results
-          path: snyk-scanning/results
+          app-path: "."
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+          snyk-org: ${{ secrets.SNYK_ORG_ID }}
+          snyk-branch: ${{ github.ref_name }}
+          gating-threshold-file: "./gating-configs/snyk_gating_thresholds_default.json"
+          snyk-project-name: "cicd-pipeline-poc/microservice-moc-app-deps"
 
+      - name: Run Snyk Test (Backend)
+        if: steps.detect-stack-backend.outputs.stack != 'docker'
+        id: snyk-test-backend
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+        run: |
+          echo "Running Snyk SCA: $SNYK_CMD"
 
+          $SNYK_CMD \
+            --org="${SNYK_ORG_ID}" \
+            --json-file-output="snyk-scanning/results/snyk-results.json" \
+            --token="${SNYK_TOKEN}" || true
+          
+          snyk code test \
+            --org="${SNYK_ORG_ID}" \
+            --json-file-output="snyk-scanning/results/snyk-code-results.json" \
+            --token="${SNYK_TOKEN}" || true
+
+      # -----------------------------------------
+      # Summary Always
+      # -----------------------------------------
+      - name: Generate security summary (Backend)
+        id: security-summary-backend
+        uses: ./.github/actions/generate-security-summary
+        with:
+          results-file: snyk-scanning/results/snyk-results.json

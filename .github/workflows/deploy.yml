@@ -1,35 +1,38 @@
 # ============================================================
-#  CI/CD Pipeline – Flujo principal de compilación, análisis,
-#  evaluación de puertas (gates) y reporte final.
+#  CI/CD PIPELINE
+#  Flujo principal que:
+#    - Construye la imagen Docker
+#    - Ejecuta análisis de seguridad (Snyk)
+#    - Ejecuta análisis de calidad (SonarCloud)
+#    - Evalúa las puertas de seguridad/gobernanza (Gates)
+#    - Genera un reporte consolidado
 # ============================================================
 
 name: CI/CD Pipeline
 
 permissions:
   contents: read
-  security-events: write   # Necesario para publicar alertas de seguridad
+  security-events: write     # Requerido para reportar hallazgos de seguridad
 
 # ------------------------------------------------------------
-#  EVENTOS QUE DISPARAN EL PIPELINE
+#  EVENTOS QUE DISPARAN EL WORKFLOW
 # ------------------------------------------------------------
 on:
   push:
-    branches: [ main, "*release*" ]      # Ejecuta en main y ramas release/*
+    branches: [ main, "*release*" ]     # Ejecutar en main y ramas release/*
   pull_request:
-    branches: [ main, "*release*" ]      # Ejecuta en PR hacia main o release
+    branches: [ main, "*release*" ]     # PR hacia main o release
   workflow_dispatch:
     inputs:
       override_gates:
-        description: "Anulación de la puerta de despliegue seguro (solo para despliegue de emergencia)"
+        description: "Permite saltar validaciones de Gates en emergencias"
         required: false
         default: "false"
         type: choice
-        options:
-          - "false"
-          - "true"
+        options: [ "false", "true" ]
 
 # ------------------------------------------------------------
-#  VARIABLES DE ENTORNO GLOBALES
+#  VARIABLES GLOBALES DEL PIPELINE
 # ------------------------------------------------------------
 env:
   JAVA_VERSION: "17"
@@ -39,9 +42,14 @@ env:
 #  JOBS DEL PIPELINE
 # ------------------------------------------------------------
 jobs:
+
+  # ==========================================================
+  # 1. BUILD DOCKER IMAGE
+  # ==========================================================
   build-docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,12 +58,13 @@ jobs:
         run: |
           docker build -t myapp:${{ github.sha }} .
 
-  # ----------------------------------------------------------
-  # 1. ESCANEO DE SEGURIDAD – Container Snyk Test
-  # ----------------------------------------------------------
+
+  # ==========================================================
+  # 2. SECURITY SCAN – Snyk (SCA, SAST, Container)
+  # ==========================================================
   security-scan:
     name: Snyk Analysis
-    needs: [ build-docker]
+    needs: [ build-docker ]
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: "17"
@@ -63,12 +72,13 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
 
-  # ----------------------------------------------------------
-  # 2. ANÁLISIS DE CALIDAD – SonarQube Cloud
-  # ----------------------------------------------------------
+
+  # ==========================================================
+  # 3. CODE QUALITY – SonarQube Cloud
+  # ==========================================================
   code-quality:
     name: SonarQube Cloud Analysis
-    needs: [ build-docker]
+    needs: [ build-docker ]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: "17"
@@ -77,42 +87,51 @@ jobs:
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
-  # ----------------------------------------------------------
-  # 3. EVALUACIÓN DE PUERTAS (GATES) – Python
-  # ----------------------------------------------------------
+
+  # ==========================================================
+  # 4. GATE EVALUATION – Fusiona resultados Snyk + Sonar
+  # ==========================================================
   gate-evaluator:
     name: Evaluate Cloud-Native Gates
-    needs: [ security-scan, code-quality ]     # Espera a que terminen los dos análisis
+    needs: [ security-scan, code-quality ]
     runs-on: ubuntu-latest
 
     steps:
-      # Descarga del código fuente
+
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Descargar resultados de Snyk generados como artefacto
+      # ------------------------------------------------------
+      # Descargar artefactos Snyk desde workflow security-scan
+      # ------------------------------------------------------
       - name: Download Snyk artifact
         uses: actions/download-artifact@v4
         with:
-          name: security-results            # Nombre del artefacto generado
-          path: gating/security             # Carpeta donde se guardará
+          name: security-results
+          path: gating/security
 
-      # Descargar resultados de SonarQube
+      # ------------------------------------------------------
+      # Descargar artefactos Sonar desde workflow code-quality
+      # ------------------------------------------------------
       - name: Download Sonar artifact
         uses: actions/download-artifact@v4
         with:
           name: quality-results
           path: gating/quality
 
-      # Sonar a veces genera el archivo con nombres diferentes → normaliza a sonar-results.json
+      # ------------------------------------------------------
+      # Asegurar nombre estándar para archivo Sonar
+      # ------------------------------------------------------
       - name: Normalize Sonar Result Filename
         run: |
-           ls gating/quality/
-           FILE=$(ls gating/quality/*.json | head -n 1)     # Detectar automáticamente
-           echo "Detected sonar file: $FILE"
-           mv "$FILE" gating/quality/sonar-results.json
+          ls gating/quality/
+          FILE=$(ls gating/quality/*.json | head -n 1)
+          echo "Detected sonar file: $FILE"
+          mv "$FILE" gating/quality/sonar-results.json
 
-      # Ejecuta el evaluador de gates
+      # ------------------------------------------------------
+      # Ejecutar evaluador de Gates (Python)
+      # ------------------------------------------------------
       - name: Run Gate Evaluator (Python)
         run: |
           python scripts/gate_evaluator.py \
@@ -123,33 +142,37 @@ jobs:
             --ref "${{ github.ref }}" \
             --target "${{ env.TARGET_ENVIRONMENT }}"
 
+      # ------------------------------------------------------
       # Publicar gate-result.json como artefacto
+      # ------------------------------------------------------
       - name: Upload Gate Result
         uses: actions/upload-artifact@v4
         with:
           name: gate-result
           path: gating/gate-result.json
 
-  # ----------------------------------------------------------
-  # 4. REPORTE FINAL DE CUMPLIMIENTO DE GATES
-  # ----------------------------------------------------------
+
+  # ==========================================================
+  # 5. GATE REPORT – Mostrar tabla y decidir FAIL/PASS
+  # ==========================================================
   gate-report:
     name: Gate Compliance Report
     needs: [ gate-evaluator ]
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Descargar resultado de la evaluación
+      # Descargar output de la evaluación de Gates
       - name: Download Gate Result
         uses: actions/download-artifact@v4
         with:
           name: gate-result
           path: gating
 
-      # Genera la tabla de gates en el resumen del Job (Markdown)
+      # Generar tabla de resultados
       - name: Display Gate Table
         id: display-table
         run: |
@@ -161,7 +184,7 @@ jobs:
 
           python scripts/render_gate_table.py gating/gate-result.json >> $GITHUB_STEP_SUMMARY
 
-      # Si el resultado final del gate evaluator es FAIL → falla el pipeline
+      # Si final_decision == FAIL → romper pipeline
       - name: Fail if gate failed
         run: |
           FINAL=$(jq -r '.final_decision' gating/gate-result.json)
