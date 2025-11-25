@@ -83,3 +83,10 @@ jobs:
             --org=${{ secrets.SNYK_ORG_ID }} \
             --token=${{ secrets.SNYK_TOKEN }} || true
 
+      - name: Upload security results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-results
+          path: snyk-scanning/results
+
+
