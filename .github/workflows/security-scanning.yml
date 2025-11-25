@@ -116,6 +116,11 @@ jobs:
             --org="${SNYK_ORG_ID}" \
             --json-file-output="snyk-scanning/results/snyk-code-results.json" \
             --token="${SNYK_TOKEN}" || true
+            
+            echo 'contenido : snyk-code-results.json'
+            cat snyk-scanning/results/snyk-code-results.json 
+            echo 'contenido : snyk-results.json'
+            cat snyk-scanning/results/snyk-results.json 
 
       # Summary (Backend)
       - name: Generate security summary (Backend)
