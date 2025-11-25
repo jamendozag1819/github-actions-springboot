@@ -330,6 +330,77 @@ def evaluate_branch(ref, target_env):
 
 
 # ================================================================
+# GATR-10 – Evaluación del Carril Exprés
+# ================================================================
+
+def evaluate_express_lane(sonar_json, t):
+    """
+    Evalúa los criterios de 'Express Lane' (GATR-10).
+    Esta puerta es consultiva (NON_ENFORCING):
+      → SOLO produce PASS o WARN.
+      → NUNCA produce FAIL.
+    
+    Condiciones WARN (si CUALQUIERA se cumple):
+      - cobertura < 80%
+      - éxito de pruebas < 80%
+      - security_rating > B
+      - reliability_rating > C
+      - new_security_rating != A
+      - new_reliability_rating != A
+    """
+    if not sonar_json:
+        return {
+            "id": "gatr-10",
+            "status": "WARN",
+            "message": "Sonar results missing for express-lane evaluation"
+        }
+
+    metrics = sonar_json.get("metrics", {})
+    ratings = metrics.get("ratings", {})
+    new_ratings = metrics.get("new_ratings", {})  # si existe
+
+    express = t["sonarqube"]["express_lane"]
+
+    issues = []
+
+    # --- Métricas numéricas ---
+    coverage = metrics.get("coverage")
+    test_success = metrics.get("test_success_rate")
+
+    if coverage is not None and coverage < express["coverage_threshold"]:
+        issues.append(f"Coverage {coverage}% < {express['coverage_threshold']}%")
+
+    if test_success is not None and test_success < express["test_success_threshold"]:
+        issues.append(f"Test success {test_success}% < {express['test_success_threshold']}%")
+
+    # --- Ratings generales ---
+    security_rating = ratings.get("security")
+    reliability_rating = ratings.get("reliability")
+
+    if security_rating and security_rating > express["max_security_rating"]:
+        issues.append(f"Security rating {security_rating} worse than {express['max_security_rating']}")
+
+    if reliability_rating and reliability_rating > express["max_reliability_rating"]:
+        issues.append(f"Reliability rating {reliability_rating} worse than {express['max_reliability_rating']}")
+
+    # --- "New Code" ratings (si existen) ---
+    new_security = new_ratings.get("security")
+    new_reliability = new_ratings.get("reliability")
+
+    if new_security and new_security != "A":
+        issues.append(f"New security rating {new_security} != A")
+
+    if new_reliability and new_reliability != "A":
+        issues.append(f"New reliability rating {new_reliability} != A")
+
+    return {
+        "id": "gatr-10",
+        "status": "PASS" if not issues else "WARN",
+        "issues": issues
+    }
+
+
+# ================================================================
 # Decisión final
 # ================================================================
 
@@ -384,6 +455,7 @@ def main():
     # Ejecutar evaluaciones
     gates = []
     gates.extend(evaluate_snyk(snyk_json, thresholds))
+    gates.append(evaluate_express_lane(sonar_json, thresholds))
     gates.extend(evaluate_sonar(sonar_json, thresholds, sonar_params))
     gates.append(evaluate_branch(args.ref, args.target))
 
