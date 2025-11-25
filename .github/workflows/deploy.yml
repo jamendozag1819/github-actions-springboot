@@ -73,8 +73,7 @@ jobs:
            echo "Detected sonar file: $FILE"
            mv "$FILE" gating/quality/sonar-results.json
            echo 'Listado gating/security:'
-           ls gating/security
-           cat gating/security/snyk-report.json
+
       - name: Run Gate Evaluator (Python)
         run: |
           python scripts/gate_evaluator.py \
