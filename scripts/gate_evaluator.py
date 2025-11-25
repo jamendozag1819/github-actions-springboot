@@ -149,7 +149,7 @@ def evaluate_snyk(snyk_json, t):
             sev_count[sev] += 1
 
     # GATR-03 Critical
-    status = "PASS" if sev_count["critical"] == t["snyk"]["critical"] else "WARN"
+    status = "PASS" if sev_count["critical"] == min(t["snyk"]["critical"], 0) else "WARN"
     results.append({
         "id": "gatr-03",
         "status": status,
@@ -158,7 +158,7 @@ def evaluate_snyk(snyk_json, t):
     })
 
     # GATR-01 High
-    status = "PASS" if sev_count["high"] <= t["snyk"]["high"] else "WARN"
+    status = "PASS" if sev_count["high"] <= min(t["snyk"]["high"], 5) else "WARN"
     results.append({
         "id": "gatr-01",
         "status": status,
@@ -167,7 +167,7 @@ def evaluate_snyk(snyk_json, t):
     })
 
     # GATR-02 Medium
-    status = "PASS" if sev_count["medium"] <= t["snyk"]["medium"] else "WARN"
+    status = "PASS" if sev_count["medium"] <= min(t["snyk"]["medium"],20) else "WARN"
     results.append({
         "id": "gatr-02",
         "status": status,
