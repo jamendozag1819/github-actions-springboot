@@ -149,7 +149,7 @@ def evaluate_snyk(snyk_json, t):
             sev_count[sev] += 1
 
     # GATR-03 Critical
-    status = "PASS" if sev_count["critical"] == 0 else "WARN"
+    status = "PASS" if sev_count["critical"] == t["snyk"]["critical"] else "WARN"
     results.append({
         "id": "gatr-03",
         "status": status,
