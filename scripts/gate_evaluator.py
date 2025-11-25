@@ -195,7 +195,7 @@ def evaluate_sonar(sonar_json, t, used_params):
     bugs = metrics.get("bugs")
     vulns = metrics.get("vulnerabilities")
     code_smells = metrics.get("code_smells")
-
+    ratings = metrics.get("ratings")
     # GATR-07 (developer thresholds)
     issues = []
 
@@ -211,14 +211,14 @@ def evaluate_sonar(sonar_json, t, used_params):
     if code_smells is not None and code_smells > t["sonarqube"]["code_smells"]:
         issues.append(f"Code smells {code_smells} > {t['sonarqube']['code_smells']}")
 
-    if security_rating is not None and security_rating == t["sonarqube"]["security_rating"]:
-        issues.append(f"Code smells {security_rating} > {t['sonarqube']['security_rating']}")
+    if ratings.security is not None and ratings.security == t["sonarqube"]["security_rating"]:
+        issues.append(f"Code smells {ratings.security} > {t['sonarqube']['security_rating']}")
 
-    if maintainability_rating is not None and maintainability_rating == t["sonarqube"]["maintainability_rating"]:
-        issues.append(f"Code smells {maintainability_rating} > {t['sonarqube']['maintainability_rating']}")
+    if ratings.maintainability is not None and ratings.maintainability == t["sonarqube"]["maintainability_rating"]:
+        issues.append(f"Code smells {ratings.maintainability} > {t['sonarqube']['maintainability_rating']}")
 
-    if reliability_rating is not None and reliability_rating == t["sonarqube"]["reliability_rating"]:
-        issues.append(f"Code smells {reliability_rating} > {t['sonarqube']['reliability_rating']}")
+    if ratings.reliability is not None and ratings.reliability == t["sonarqube"]["reliability_rating"]:
+        issues.append(f"Code smells {ratings.reliability} > {t['sonarqube']['reliability_rating']}")
 
     results.append({
         "id": "gatr-07",
