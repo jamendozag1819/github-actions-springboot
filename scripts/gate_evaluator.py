@@ -195,7 +195,7 @@ def evaluate_sonar(sonar_json, t, used_params):
     bugs = metrics.get("bugs")
     vulns = metrics.get("vulnerabilities")
     code_smells = metrics.get("code_smells")
-    ratings = metrics.get("ratings")
+    
     # GATR-07 (developer thresholds)
     issues = []
 
