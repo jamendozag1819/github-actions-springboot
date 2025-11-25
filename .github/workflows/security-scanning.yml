@@ -61,7 +61,8 @@ jobs:
 
       - name: Show detected stack
         shell: bash
-        run: echo "Detected: $SNYK_STACK"
+        run: |
+         echo "Detected: $SNYK_STACK"
 
       # -----------------------------------------
       # IF STACK == DOCKER → SOLO CONTENEDORES
