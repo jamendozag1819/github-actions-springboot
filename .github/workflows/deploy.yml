@@ -66,11 +66,11 @@ jobs:
           name: quality-results
           path: gating/quality
 
-      - name: Normalize Sonar Result Filename
-        run: |
-           FILE=$(ls gating/quality/*.json | head -n 1)
-           echo "Detected sonar file: $FILE"
-           mv "$FILE" gating/quality/sonar-results.json
+#      - name: Normalize Sonar Result Filename
+#        run: |
+#           FILE=$(ls gating/quality/*.json | head -n 1)
+#           echo "Detected sonar file: $FILE"
+#           mv "$FILE" gating/quality/sonar-results.json
 
       - name: Run Gate Evaluator (Python)
         run: |
