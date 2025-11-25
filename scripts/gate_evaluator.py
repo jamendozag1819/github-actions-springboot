@@ -70,7 +70,8 @@ def load_snyk_results(directory):
         "snyk-results.json",
         "snyk-output.json",
         "results.json",
-        "security-results.json"
+        "security-results.json",
+        "snyk-report.json"
     ]
     f = find_file(directory, candidates)
     return read_json(f)

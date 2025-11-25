@@ -1,65 +1,92 @@
+# -------------------------------------------------------------
+#  WORKFLOW: Security Scanning
+#  Descripción:
+#    - Detecta el stack tecnológico del proyecto.
+#    - Mapea el comando Snyk adecuado según el stack.
+#    - Ejecuta Snyk Code (SAST) y Snyk Test (SCA).
+#    - Genera resúmenes de vulnerabilidades.
+#    - Expone métricas que pueden ser usadas en workflows
+#      posteriores (por ejemplo, para Gating de calidad).
+# -------------------------------------------------------------
+
 name: "Security Scanning"
+
+# Permisos mínimos requeridos para lectura del repo
+# y reporte de eventos de seguridad
 permissions:
   contents: read
   security-events: write
 
+# Este workflow es reutilizable (workflow_call)
 on:
   workflow_call:
     inputs:
       java-version:
-        description: "Java version to use"
+        description: "Versión de Java a utilizar"
         required: false
         type: string
         default: "17"
+
+    # Secretos obligatorios para ejecutar Snyk
     secrets:
       SNYK_TOKEN:
         required: true
       SNYK_ORG_ID:
         required: true
 
+    # Salidas que expondrá este workflow al que lo invoque
     outputs:
       critical-count:
-        description: "Number of critical vulnerabilities found"
+        description: "Cantidad de vulnerabilidades críticas"
         value: ${{ jobs.security-scan.outputs.critical-count }}
       high-count:
-        description: "Number of high vulnerabilities found"
+        description: "Cantidad de vulnerabilidades altas"
         value: ${{ jobs.security-scan.outputs.high-count }}
       medium-count:
-        description: "Number of medium vulnerabilities found"
+        description: "Cantidad de vulnerabilidades medias"
         value: ${{ jobs.security-scan.outputs.medium-count }}
       low-count:
-        description: "Number of low vulnerabilities found"
+        description: "Cantidad de vulnerabilidades bajas"
         value: ${{ jobs.security-scan.outputs.low-count }}
       stack:
-        description: "Detected technology stack"
+        description: "Stack tecnológico detectado"
         value: ${{ jobs.security-scan.outputs.stack }}
 
+# -------------------------------------------------------------
+#  JOB PRINCIPAL: security-scan
+# -------------------------------------------------------------
 jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
 
+    # Outputs del job (consumidos por workflow padre)
     outputs:
       critical-count: ${{ steps.security-summary-backend.outputs.critical-count }}
-      high-count: ${{ steps.security-summary-backend.outputs.high-count }}
-      medium-count: ${{ steps.security-summary-backend.outputs.medium-count }}
-      low-count: ${{ steps.security-summary-backend.outputs.low-count }}
-      stack: ${{ steps.detect-stack-backend.outputs.stack }}
-        
+      high-count:     ${{ steps.security-summary-backend.outputs.high-count }}
+      medium-count:   ${{ steps.security-summary-backend.outputs.medium-count }}
+      low-count:      ${{ steps.security-summary-backend.outputs.low-count }}
+      stack:          ${{ steps.detect-stack-backend.outputs.stack }}
 
     steps:
-      # Checkout
+
+      # ---------------------------------------------------------
+      # 1. Descargar código del repositorio
+      # ---------------------------------------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Java
+      # ---------------------------------------------------------
+      # 2. Configurar Java y Maven (acción personalizada)
+      # ---------------------------------------------------------
       - name: Setup Java and Maven
         uses: ./.github/actions/setup-java-maven
         with:
           java-version: ${{ inputs.java-version }}
 
-
-      # Detect tech stack (Backend)
+      # ---------------------------------------------------------
+      # 3. Detectar el stack tecnológico del backend
+      # ---------------------------------------------------------
       - name: Detect technology stack (Backend)
         id: detect-stack-backend
         shell: bash
@@ -71,9 +98,11 @@ jobs:
       - name: Show detected stacks (Backend)
         shell: bash
         run: |
-         echo "Detected stacks: $SNYK_STACKS"
+          echo "Detected stacks: $SNYK_STACKS"
 
-      # Map stack → CLI
+      # ---------------------------------------------------------
+      # 4. Mapear el comando Snyk correcto según el stack
+      # ---------------------------------------------------------
       - name: Map Snyk command (Backend)
         id: map-command-backend
         shell: bash
@@ -87,7 +116,9 @@ jobs:
         run: |
           echo "Final command: $SNYK_CMD"
 
-      # Run Snyk Code (Backend)
+      # ---------------------------------------------------------
+      # 5. Ejecutar Snyk Code (SAST) — análisis de código fuente
+      # ---------------------------------------------------------
       - name: Run Snyk Code (SAST Backend)
         id: snyk-code-backend
         uses: ./.github/actions/snyk-code-analysis
@@ -99,7 +130,9 @@ jobs:
           gating-threshold-file: "./gating-configs/snyk_gating_thresholds_default.json"
           snyk-project-name: "cicd-pipeline-poc/microservice-moc-app-deps"
 
-      # Run Snyk Test (Backend)
+      # ---------------------------------------------------------
+      # 6. Ejecutar Snyk Test (SCA) — análisis de dependencias
+      # ---------------------------------------------------------
       - name: Run Snyk Test (Backend)
         id: snyk-test-backend
         env:
@@ -107,22 +140,22 @@ jobs:
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
           echo "Running: $SNYK_CMD"
+
+          # Análisis de dependencias (SCA)
           $SNYK_CMD \
             --org="${SNYK_ORG_ID}" \
             --json-file-output="snyk-scanning/results/snyk-results.json" \
             --token="${SNYK_TOKEN}" || true
           
+          # Análisis de código fuente (SAST)
           snyk code test \
             --org="${SNYK_ORG_ID}" \
             --json-file-output="snyk-scanning/results/snyk-code-results.json" \
             --token="${SNYK_TOKEN}" || true
-            
-            echo 'contenido : snyk-code-results.json'
-            cat snyk-scanning/results/snyk-code-results.json 
-            echo 'contenido : snyk-results.json'
-            cat snyk-scanning/results/snyk-results.json 
 
-      # Summary (Backend)
+      # ---------------------------------------------------------
+      # 7. Generar resumen de seguridad y exponer métricas
+      # ---------------------------------------------------------
       - name: Generate security summary (Backend)
         id: security-summary-backend
         uses: ./.github/actions/generate-security-summary
