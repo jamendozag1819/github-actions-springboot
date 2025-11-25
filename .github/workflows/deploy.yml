@@ -39,9 +39,19 @@ env:
 #  JOBS DEL PIPELINE
 # ------------------------------------------------------------
 jobs:
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build docker image
+        run: |
+          docker build -t myapp:${{ github.sha }} .
 
   # ----------------------------------------------------------
-  # 1. ESCANEO DE SEGURIDAD – Snyk
+  # 1. ESCANEO DE SEGURIDAD – Container Snyk Test
   # ----------------------------------------------------------
   security-scan:
     name: Snyk Analysis
