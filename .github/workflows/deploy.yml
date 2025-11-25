@@ -55,6 +55,7 @@ jobs:
   # ----------------------------------------------------------
   security-scan:
     name: Snyk Analysis
+    needs: [ build-docker]
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: "17"
@@ -67,6 +68,7 @@ jobs:
   # ----------------------------------------------------------
   code-quality:
     name: SonarQube Cloud Analysis
+    needs: [ build-docker]
     uses: ./.github/workflows/quality-analysis.yml
     with:
       java-version: "17"
