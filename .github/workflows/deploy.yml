@@ -1,14 +1,22 @@
+# ============================================================
+#  CI/CD Pipeline – Flujo principal de compilación, análisis,
+#  evaluación de puertas (gates) y reporte final.
+# ============================================================
+
 name: CI/CD Pipeline
 
 permissions:
   contents: read
-  security-events: write
+  security-events: write   # Necesario para publicar alertas de seguridad
 
+# ------------------------------------------------------------
+#  EVENTOS QUE DISPARAN EL PIPELINE
+# ------------------------------------------------------------
 on:
   push:
-    branches: [ main, "*release*" ]
+    branches: [ main, "*release*" ]      # Ejecuta en main y ramas release/*
   pull_request:
-    branches: [ main, "*release*" ]
+    branches: [ main, "*release*" ]      # Ejecuta en PR hacia main o release
   workflow_dispatch:
     inputs:
       override_gates:
@@ -20,12 +28,21 @@ on:
           - "false"
           - "true"
 
+# ------------------------------------------------------------
+#  VARIABLES DE ENTORNO GLOBALES
+# ------------------------------------------------------------
 env:
   JAVA_VERSION: "17"
   MAVEN_VERSION: "3.8.6"
 
+# ------------------------------------------------------------
+#  JOBS DEL PIPELINE
+# ------------------------------------------------------------
 jobs:
 
+  # ----------------------------------------------------------
+  # 1. ESCANEO DE SEGURIDAD – Snyk
+  # ----------------------------------------------------------
   security-scan:
     name: Snyk Analysis
     uses: ./.github/workflows/security-scanning.yml
@@ -35,6 +52,9 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
 
+  # ----------------------------------------------------------
+  # 2. ANÁLISIS DE CALIDAD – SonarQube Cloud
+  # ----------------------------------------------------------
   code-quality:
     name: SonarQube Cloud Analysis
     uses: ./.github/workflows/quality-analysis.yml
@@ -45,34 +65,42 @@ jobs:
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
 
+  # ----------------------------------------------------------
+  # 3. EVALUACIÓN DE PUERTAS (GATES) – Python
+  # ----------------------------------------------------------
   gate-evaluator:
     name: Evaluate Cloud-Native Gates
-    needs: [ security-scan, code-quality ]
+    needs: [ security-scan, code-quality ]     # Espera a que terminen los dos análisis
     runs-on: ubuntu-latest
 
     steps:
+      # Descarga del código fuente
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Descargar resultados de Snyk generados como artefacto
       - name: Download Snyk artifact
         uses: actions/download-artifact@v4
         with:
-          name: security-results
-          path: gating/security
+          name: security-results            # Nombre del artefacto generado
+          path: gating/security             # Carpeta donde se guardará
 
+      # Descargar resultados de SonarQube
       - name: Download Sonar artifact
         uses: actions/download-artifact@v4
         with:
           name: quality-results
           path: gating/quality
 
+      # Sonar a veces genera el archivo con nombres diferentes → normaliza a sonar-results.json
       - name: Normalize Sonar Result Filename
         run: |
            ls gating/quality/
-           FILE=$(ls gating/quality/*.json | head -n 1)
+           FILE=$(ls gating/quality/*.json | head -n 1)     # Detectar automáticamente
            echo "Detected sonar file: $FILE"
            mv "$FILE" gating/quality/sonar-results.json
 
+      # Ejecuta el evaluador de gates
       - name: Run Gate Evaluator (Python)
         run: |
           python scripts/gate_evaluator.py \
@@ -83,12 +111,16 @@ jobs:
             --ref "${{ github.ref }}" \
             --target "${{ env.TARGET_ENVIRONMENT }}"
 
+      # Publicar gate-result.json como artefacto
       - name: Upload Gate Result
         uses: actions/upload-artifact@v4
         with:
           name: gate-result
           path: gating/gate-result.json
 
+  # ----------------------------------------------------------
+  # 4. REPORTE FINAL DE CUMPLIMIENTO DE GATES
+  # ----------------------------------------------------------
   gate-report:
     name: Gate Compliance Report
     needs: [ gate-evaluator ]
@@ -98,12 +130,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Descargar resultado de la evaluación
       - name: Download Gate Result
         uses: actions/download-artifact@v4
         with:
           name: gate-result
           path: gating
 
+      # Genera la tabla de gates en el resumen del Job (Markdown)
       - name: Display Gate Table
         id: display-table
         run: |
@@ -115,6 +149,7 @@ jobs:
 
           python scripts/render_gate_table.py gating/gate-result.json >> $GITHUB_STEP_SUMMARY
 
+      # Si el resultado final del gate evaluator es FAIL → falla el pipeline
       - name: Fail if gate failed
         run: |
           FINAL=$(jq -r '.final_decision' gating/gate-result.json)

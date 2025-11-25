@@ -1,10 +1,18 @@
+# ============================================================
+#  Code Quality Analysis
+#  Análisis de calidad de código con SonarCloud / SonarQube
+# ============================================================
+
 name: 'Code Quality Analysis'
 
+# ------------------------------------------------------------
+#  ACTIVACIÓN DEL WORKFLOW
+# ------------------------------------------------------------
 on:
-  workflow_call:
+  workflow_call:      # Este workflow es llamado desde otros pipelines
     inputs:
       java-version:
-        description: 'Java version to use'
+        description: 'Versión de Java a utilizar en el análisis'
         required: false
         type: string
         default: '17'
@@ -17,50 +25,69 @@ on:
       SONAR_PROJECT_KEY:
         required: true
 
+    # Valores retornados al workflow que lo llama
     outputs:
       quality-gate-status:
-        description: 'Quality gate status (PASSED/FAILED/UNKNOWN)'
+        description: 'Estado final del Quality Gate (PASSED/FAILED/UNKNOWN)'
         value: ${{ jobs.code-quality.outputs.quality-gate-status }}
+
       sonarqube-configured:
-        description: 'Whether SonarQube is properly configured'
+        description: 'Indica si SonarQube está correctamente configurado'
         value: ${{ jobs.code-quality.outputs.sonarqube-configured }}
+
       sonar-gate-exit-code:
-        description: 'Exit code from SonarQube quality gate analysis'
+        description: 'Código de salida generado por el Quality Gate'
         value: ${{ jobs.code-quality.outputs.sonar-gate-exit-code }}
 
+# ------------------------------------------------------------
+#  JOB: Análisis de SonarCloud
+# ------------------------------------------------------------
 jobs:
 
   code-quality:
     name: SonarCloud Analysis (Multistack)
     runs-on: ubuntu-latest
 
+    # Valores exportados por el job
     outputs:
       quality-gate-status: ${{ steps.sonar_scan.outputs.quality_gate_status }}
       sonarqube-configured: ${{ steps.sonar_scan.outputs.sonarqube_configured }}
       sonar-gate-exit-code: ${{ steps.sonar_scan.outputs.sonar_gate_exit_code }}
 
     steps:
+
+      # ------------------------------------------------------
+      # 1. Descargar el código fuente
+      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ------------------------------------------------------
+      # 2. Ejecutar análisis de SonarCloud
+      #    Acción compuesta que autodescubre la tecnología
+      # ------------------------------------------------------
       - name: Run Sonar Code Analysis (Composite Action)
         id: sonar_scan
         uses: ./.github/actions/sonar-code-analysis
         with:
-          app-path: "."
+          app-path: "."                     # Ruta del proyecto
           sonar-host-url: "https://sonarcloud.io"
           tech-version: ${{ inputs.java-version }}
-          project-path: "."
+          project-path: "."                 # Ejecuta análisis desde raíz
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           sonar-organization: ${{ secrets.SONAR_ORGANIZATION }}
           sonar-project-key: ${{ secrets.SONAR_PROJECT_KEY }}
           sonar-branch: ${{ github.ref_name }}
-          app-techstack: "auto"
+          app-techstack: "auto"             # Autodetección del stack
 
+      # ------------------------------------------------------
+      # 3. Subir como artefacto los resultados del escaneo
+      #    (usado después por el gate evaluator)
+      # ------------------------------------------------------
       - name: Upload quality results
         uses: actions/upload-artifact@v4
         with:
-          name: quality-results
-          path: sonarqube-cloud-scanning/results
+          name: quality-results                      # Nombre del artefacto
+          path: sonarqube-cloud-scanning/results     # Carpeta donde están los JSON
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1                          # Mantener 1 días
