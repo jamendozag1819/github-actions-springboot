@@ -72,7 +72,6 @@ jobs:
            FILE=$(ls gating/quality/*.json | head -n 1)
            echo "Detected sonar file: $FILE"
            mv "$FILE" gating/quality/sonar-results.json
-           echo 'Listado gating/security:'
 
       - name: Run Gate Evaluator (Python)
         run: |
