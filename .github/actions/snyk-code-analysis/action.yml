@@ -20,7 +20,7 @@ inputs:
   gating-threshold-file:
     description: "Path to gating thresholds JSON"
     required: false
-    default: "./gating-configs/snyk_gating_thresholds.json"
+    default: "./gating-configs/snyk_gating_thresholds_default.json"
 
 runs:
   using: "composite"
@@ -94,4 +94,4 @@ runs:
         name: security-results
         path: ./snyk-scanning/results/snyk-report.json
         if-no-files-found: warn
-        retention-days: 3
+        retention-days: 1

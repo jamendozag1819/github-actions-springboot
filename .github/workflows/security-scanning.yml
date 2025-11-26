@@ -97,8 +97,9 @@ jobs:
         run: |
           echo "Final command: $SNYK_CMD"
 
-      # Run Snyk Code (Backend)
+            # Run Snyk Code (Backend) — SOLO si NO es Docker
       - name: Run Snyk Code (SAST Backend)
+        if: steps.detect-stack-backend.outputs.stack != 'docker'
         id: snyk-code-backend
         uses: ./.github/actions/snyk-code-analysis
         with:
@@ -109,24 +110,24 @@ jobs:
           gating-threshold-file: "./gating-configs/snyk_gating_thresholds_default.json"
           snyk-project-name: "jamendozag1819_github-actions-springboot"
 
-      # Run Snyk Test (Backend)
+
+      # Run Snyk Test (Backend) — SOLO si ES Docker
       - name: Run Snyk Test (Backend)
+        if: steps.detect-stack-backend.outputs.stack == 'docker'
         id: snyk-test-backend
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
         run: |
-          echo "Running: $SNYK_CMD"
-          $SNYK_CMD \
-            --org="${SNYK_ORG_ID}" myapp:${{ github.sha }} .\
-            --file=Dockerfile
+          echo "Running Snyk Container Test for image myapp:${{ github.sha }}"
+          docker save myapp:${{ github.sha }} -o image.tar
+
+          snyk container test image.tar \
+            --file=Dockerfile \
+            --org="${SNYK_ORG_ID}" \
             --json-file-output="snyk-scanning/results/snyk-results.json" \
             --token="${SNYK_TOKEN}" || true
-          
-          snyk code test \
-            --org="${SNYK_ORG_ID}" \
-            --json-file-output="snyk-scanning/results/snyk-code-results.json" \
-            --token="${SNYK_TOKEN}" || true
+
             
 
       # Summary (Backend)
