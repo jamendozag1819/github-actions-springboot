@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 import os
+import json
 
-stack = os.getenv("SNYK_STACK", "").strip()
+stack = os.getenv("SNYK_STACK", "unknown")
 
-print("🔍 Resolving Snyk command for single stack...")
-
-if not stack:
-    print("⚠️  No SNYK_STACK provided — using default 'snyk test'.")
-    stack = "unknown"
-
-print(f"📦 Stack: {stack}")
+print(f"Resolving Snyk command for stack: {stack}")
 
 SNYK_COMMAND_MAP = {
     "java-maven": "snyk test --all-projects",
@@ -19,23 +14,18 @@ SNYK_COMMAND_MAP = {
     "angular": "snyk test --all-projects",
     "nodejs": "snyk test",
     "python": "snyk test",
-    "docker": "snyk container test"
+    "docker": "snyk test --docker Dockerfile"
 }
 
 DEFAULT_CMD = "snyk test"
-command = SNYK_COMMAND_MAP.get(stack)
 
-if not command:
-    print(f"⚠️  Unknown stack '{stack}', using default: {DEFAULT_CMD}")
-    command = DEFAULT_CMD
+command = SNYK_COMMAND_MAP.get(stack, DEFAULT_CMD)
 
-print(f"✅ Resolved command: {command}")
+print(f"Resolved command: {command}")
 
-# Write to GITHUB_ENV
 github_env = os.getenv("GITHUB_ENV")
 if github_env:
     with open(github_env, "a") as f:
         f.write(f"SNYK_CMD={command}\n")
-    print("💾 Exported SNYK_CMD to GitHub environment.")
 else:
-    print("❌ GITHUB_ENV not found — unable to export command.")
+    print("GITHUB_ENV not found")
