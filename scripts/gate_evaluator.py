@@ -363,7 +363,7 @@ def decide_final(gates):
             return "FAIL_PENDING_EXCEPTION"
         if g["status"] == "WARN" and final == "PASS":
             final = "WARN"
-    return "FAIL_PENDING_EXCEPTION"
+    return final
 
 
 # ======================================================================
@@ -400,27 +400,35 @@ def main():
 
     # Decisión sin excepciones
     final = decide_final(gates)
-    print("Gates : ",gates)
+    print("=== Gates Evaluated ===")
+    for g in gates:
+        print(json.dumps(g, indent=2))
+
     # Si falla un gate ENFORCING → buscar excepción en Jira
     if final == "FAIL_PENDING_EXCEPTION":
         app_id = os.getenv("APP_ID", "unknown")
-        print("Checking Jira for exception approvals...")
+        print("\nChecking Jira for exception approvals...")
 
         failed = [
             g for g in gates
             if g["id"] in ("gatr-08", "gatr-09", "gatr-14") and g["status"] == "FAIL"
         ]
+        print(f"Failed enforcing gates: {[g['id'] for g in failed]}")
 
         exception_found = False
 
         for g in failed:
+            print(f"\nChecking gate {g['id']} against Jira...")
             r = jira_check_exception(g["id"], app_id)
+            print(f"Jira response: {r}")
             if r.get("approved"):
                 g["status"] = "PASS_WITH_EXCEPTION"
                 g["exception_issue"] = r["issue_key"]
                 g["exception_expiry"] = r["expiry"]
                 exception_found = True
                 print(f"✔ Exception approved for {g['id']} ({r['issue_key']})")
+            else:
+                print(f"❌ No approved exception found for {g['id']}")
 
         if exception_found:
             final = "PASS_WITH_EXCEPTION"
@@ -435,10 +443,11 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump({"final_decision": final, "gates": gates}, f, indent=2)
 
-    print(f"Gate evaluation: {final}")
+    print(f"\nGate evaluation: {final}")
     print(f"Output written to: {args.output}")
 
     exit(1 if final == "FAIL" else 0)
+
 
 
 if __name__ == "__main__":
