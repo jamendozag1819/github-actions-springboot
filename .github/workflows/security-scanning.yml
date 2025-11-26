@@ -66,7 +66,7 @@ jobs:
           app-path: "."
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
-          snyk-project-name: ${{ github.repository }}   # Ajusta si quieres un nombre distinto
+          snyk-project-name: microservice-moc-app-container # Ajusta si quieres un nombre distinto
 
       - name: Extract Snyk results for Gates
         id: extract
