@@ -78,7 +78,7 @@ jobs:
           python3 ./scripts/snyk-tech.py
           echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
           echo "Detected stacks: $SNYK_STACKS"
-          echo steps.detect-stack-backend.outputs.stack
+          echo ${{steps.detect-stack-backend.outputs.stack}}
 
       - name: Map Snyk command (Backend)
         id: map-command-backend
