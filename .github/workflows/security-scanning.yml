@@ -76,8 +76,12 @@ jobs:
         run: |
           chmod +x ./scripts/snyk-tech.py
           python3 ./scripts/snyk-tech.py
-          echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
           
+
+      - name: Export stack output
+        id: export-stack
+        run: |
+             echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
 
       - name: Map Snyk command (Backend)
         id: map-command-backend
@@ -89,6 +93,7 @@ jobs:
       - name: Show Snyk command (Backend)
         shell: bash
         run: |
+          echo "stack=$SNYK_CMD" >> $GITHUB_OUTPUT
           echo "Resolved command: $SNYK_CMD"
           echo "Detected stacks: $SNYK_STACKS"
           echo ${{steps.detect-stack-backend.outputs.stack}}
