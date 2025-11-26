@@ -13,7 +13,6 @@ name: CI/CD Pipeline
 permissions:
   contents: read
   security-events: write     # Requerido para reportar hallazgos de seguridad
-
 # ------------------------------------------------------------
 #  EVENTOS QUE DISPARAN EL WORKFLOW
 # ------------------------------------------------------------
