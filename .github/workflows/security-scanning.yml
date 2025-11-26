@@ -16,6 +16,16 @@ on:
         required: true
       SNYK_ORG_ID:
         required: true
+      APP_ID:
+        required: true
+      JIRA_URL:
+        required: true
+      JIRA_USER:
+        required: true
+      JIRA_API_TOKEN:
+        required: true
+      JIRA_PROJECT:
+        required: true
 
     outputs:
       critical-count:

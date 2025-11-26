@@ -48,7 +48,7 @@ def jira_check_exception(gate_id, app_id):
     """
     JIRA_URL = os.getenv("JIRA_URL")
     JIRA_USER = os.getenv("JIRA_USER")
-    JIRA_TOKEN = os.getenv("JIRA_TOKEN")
+    JIRA_TOKEN = os.getenv("JIRA_API_TOKEN")
     JIRA_PROJECT = os.getenv("JIRA_PROJECT", "GATES")
 
     if not all([JIRA_URL, JIRA_USER, JIRA_TOKEN]):
