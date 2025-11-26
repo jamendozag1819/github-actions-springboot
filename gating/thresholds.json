@@ -1,7 +1,7 @@
 {
   "snyk": {
-    "critical": 5,
-    "high": 5,
+    "critical": 0,
+    "high": 2,
     "medium": 20,
     "low": 100
   },
