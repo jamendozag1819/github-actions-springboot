@@ -37,6 +37,7 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
+
 # ======================================================================
 # Jira Exception Checker
 # ======================================================================
