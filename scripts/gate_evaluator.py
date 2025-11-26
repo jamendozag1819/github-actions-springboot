@@ -411,7 +411,7 @@ def main():
 
         failed = [
             g for g in gates
-            if g["id"] in ("gatr-08", "gatr-09", "gatr-14") and g["status"] == "FAIL"
+            if g["id"] in ("gatr-07","gatr-08", "gatr-09", "gatr-14") and g["status"] == "FAIL"
         ]
         print(f"Failed enforcing gates: {[g['id'] for g in failed]}")
 
