@@ -10,8 +10,8 @@ on:
       project-key:
         description: "Sonar Project Key"
         required: false
-        default: ${{ secrets.SONAR_PROJECT_KEY }}
         type: string
+
     secrets:
       SONAR_TOKEN:
         required: true
@@ -21,7 +21,6 @@ on:
         required: true
 
 jobs:
-
   sonar-analysis:
     name: SonarQube Code Quality Scan
     runs-on: ubuntu-latest
@@ -30,18 +29,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -----------------------------
-      # Setup Java
-      # -----------------------------
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ inputs.java-version }}
 
-      # -----------------------------
-      # Install Sonar Scanner
-      # -----------------------------
       - name: Install Sonar Scanner
         run: |
           curl -sSLo sonar.zip \
@@ -50,16 +43,17 @@ jobs:
           mv $HOME/sonar-scanner-* $HOME/sonar-scanner
           echo "$HOME/sonar-scanner/bin" >> $GITHUB_PATH
 
-      # -----------------------------
-      # Run Sonar Scan
-      # -----------------------------
+      # ----------------------------------
+      # Run Sonar Analysis
+      # ----------------------------------
       - name: Run Sonar Scanner
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORG: ${{ secrets.SONAR_ORGANIZATION }}
-          SONAR_PROJECT: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_PROJECT: ${{ inputs.project-key || secrets.SONAR_PROJECT_KEY }}
         run: |
-          echo "Running Sonar scanner..."
+          echo "Project key to scan: $SONAR_PROJECT"
+
           sonar-scanner \
             -Dsonar.organization="${SONAR_ORG}" \
             -Dsonar.projectKey="${SONAR_PROJECT}" \
@@ -67,16 +61,15 @@ jobs:
             -Dsonar.host.url="https://sonarcloud.io" \
             -Dsonar.login="${SONAR_TOKEN}"
 
-      # -----------------------------
-      # Wait for Quality Gate + Metrics
-      # -----------------------------
-      - name: Run Sonar Quality Gate + Threshold Check
-        shell: bash
+      # ----------------------------------
+      # Sonar Gating Script
+      # ----------------------------------
+      - name: Sonar Quality Gate Validation
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PROJECT: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_PROJECT: ${{ inputs.project-key || secrets.SONAR_PROJECT_KEY }}
         run: |
-          echo "Running Sonar gating script..."
+          echo "Running gating for $SONAR_PROJECT..."
           python3 scripts/sonar_gating.py \
             --sonar-host "https://sonarcloud.io" \
             --token "${SONAR_TOKEN}" \
