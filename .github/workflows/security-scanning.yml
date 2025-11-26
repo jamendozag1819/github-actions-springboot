@@ -17,13 +17,17 @@ on:
       SNYK_ORG_ID:
         required: true
 
-
     outputs:
-      critical-count: ${{ jobs.security-scan.outputs.critical-count }}
-      high-count:     ${{ jobs.security-scan.outputs.high-count }}
-      medium-count:   ${{ jobs.security-scan.outputs.medium-count }}
-      low-count:      ${{ jobs.security-scan.outputs.low-count }}
-      stack:          ${{ jobs.security-scan.outputs.stack }}
+     critical-count:
+      value: ${{ jobs.security-scan.outputs.critical-count }}
+     high-count:
+      value: ${{ jobs.security-scan.outputs.high-count }}
+     medium-count:
+      value: ${{ jobs.security-scan.outputs.medium-count }}
+     low-count:
+      value: ${{ jobs.security-scan.outputs.low-count }}
+     stack:
+      value: ${{ jobs.security-scan.outputs.stack }}
 
 jobs:
   security-scan:
