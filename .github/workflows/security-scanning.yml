@@ -118,7 +118,7 @@ jobs:
         run: |
           echo "Running: $SNYK_CMD"
           $SNYK_CMD \
-            --org="${SNYK_ORG_ID}" myapp:${{ github.sha }}\
+            --org="${SNYK_ORG_ID}" myapp:${{ github.sha }} .\
             --file=Dockerfile
             --json-file-output="snyk-scanning/results/snyk-results.json" \
             --token="${SNYK_TOKEN}" || true
