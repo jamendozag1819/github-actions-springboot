@@ -363,7 +363,7 @@ def decide_final(gates):
             return "FAIL_PENDING_EXCEPTION"
         if g["status"] == "WARN" and final == "PASS":
             final = "WARN"
-    return final
+    return "FAIL_PENDING_EXCEPTION"
 
 
 # ======================================================================
