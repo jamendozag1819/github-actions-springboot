@@ -77,11 +77,8 @@ jobs:
           chmod +x ./scripts/snyk-tech.py
           python3 ./scripts/snyk-tech.py
           echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
-
-      - name: Show detected stacks (Backend)
-        shell: bash
-        run: |
-         echo "Detected stacks: $SNYK_STACKS"
+          echo "Detected stacks: $SNYK_STACKS"
+          echo steps.detect-stack-backend.outputs.stack
 
       - name: Map Snyk command (Backend)
         id: map-command-backend
