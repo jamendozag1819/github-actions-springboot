@@ -11,10 +11,9 @@ Este script:
     - Carga resultados de Snyk (SCA y SAST)
     - Carga resultados de SonarQube
     - Aplica umbrales de calidad predefinidos o personalizados
-    - Evalúa múltiples reglas GATR-XX que determinan si el proyecto
-      puede avanzar en el pipeline (DEV, UAT, PROD)
-    - Genera un archivo JSON final con todas las evaluaciones
-    - Devuelve un código de salida para bloquear o permitir despliegues
+    - Evalúa múltiples reglas GATR-XX
+    - Genera un archivo JSON final con el resultado
+    - Retorna un código de salida para enforcement
 
 Uso:
     python gate_evaluator.py \
@@ -26,102 +25,137 @@ Uso:
         --target PROD \
         --ref refs/heads/release/1.0.0
 
-Códigos de salida:
-    0 → PASS, WARN o PASS_WITH_EXCEPTION
-    1 → FAIL (bloquea despliegue)
+Exit Codes:
+    0 → PASS / WARN / PASS_WITH_EXCEPTION
+    1 → FAIL
 """
 
 import os
 import json
 import argparse
+import requests
+from datetime import datetime
 from pathlib import Path
 
+# ======================================================================
+# Jira Exception Checker
+# ======================================================================
 
-# ================================================================
-# Helpers (funciones auxiliares)
-# ================================================================
+def jira_check_exception(gate_id, app_id):
+    """
+    Consulta Jira para verificar si existe una excepción aprobada
+    para un gate específico.
+    """
+    JIRA_URL = os.getenv("JIRA_URL")
+    JIRA_USER = os.getenv("JIRA_USER")
+    JIRA_TOKEN = os.getenv("JIRA_TOKEN")
+    JIRA_PROJECT = os.getenv("JIRA_PROJECT", "GATES")
 
-def read_json(file_path):
-    """
-    Lee un archivo JSON si existe y lo devuelve como dict.
-    Si no existe o está corrupto, devuelve None.
-    """
-    if not file_path or not os.path.exists(file_path):
+    if not all([JIRA_URL, JIRA_USER, JIRA_TOKEN]):
+        print("⚠ Jira integration not configured. Skipping.")
+        return {"approved": False}
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    jql = f'''
+        project = {JIRA_PROJECT} AND
+        cf_gate_id = "{gate_id}" AND
+        cf_application_id = "{app_id}" AND
+        cf_exception_approval_status = "DECISION MADE" AND
+        cf_exception_approval_decision = "Approved" AND
+        cf_exception_expiry_date >= "{today}"
+    '''
+
+    url = f"{JIRA_URL}/rest/api/2/search"
+
+    try:
+        response = requests.get(
+            url,
+            params={"jql": jql},
+            auth=(JIRA_USER, JIRA_TOKEN),
+            headers={"Content-Type": "application/json"}
+        )
+    except Exception as e:
+        print(f"Error contacting Jira: {e}")
+        return {"approved": False}
+
+    if response.status_code != 200:
+        print(f"Jira query failed: HTTP {response.status_code}")
+        return {"approved": False}
+
+    data = response.json()
+
+    if data.get("total", 0) > 0:
+        issue = data["issues"][0]
+        return {
+            "approved": True,
+            "issue_key": issue["key"],
+            "expiry": issue["fields"].get("cf_exception_expiry_date")
+        }
+
+    return {"approved": False}
+
+# ======================================================================
+# Utility Helpers
+# ======================================================================
+
+def read_json(path):
+    if not path or not os.path.exists(path):
         return None
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except:
         return None
 
 
 def find_file(directory, candidates):
-    """
-    Busca dentro de un directorio un archivo que coincida
-    exactamente o parcialmente con los nombres candidatos.
-    """
     if not directory or not os.path.exists(directory):
         return None
 
     files = os.listdir(directory)
 
-    # Coincidencia exacta
-    for name in candidates:
-        if name.lower() in [f.lower() for f in files]:
-            return os.path.join(directory, name)
+    # exact match
+    for c in candidates:
+        if c.lower() in [f.lower() for f in files]:
+            return os.path.join(directory, c)
 
-    # Coincidencia parcial
+    # partial match
     for f in files:
-        for candidate in candidates:
-            if candidate.lower() in f.lower():
+        for c in candidates:
+            if c.lower() in f.lower():
                 return os.path.join(directory, f)
 
     return None
 
 
-# ================================================================
-# Carga de resultados
-# ================================================================
+# ======================================================================
+# Load Snyk & SonarQube Results
+# ======================================================================
 
 def load_snyk_results(directory):
-    """
-    Busca y carga los resultados de Snyk desde el directorio dado.
-    """
     candidates = [
-        "snyk-results.json",
-        "snyk-output.json",
-        "results.json",
-        "security-results.json",
-        "snyk-report.json"
+        "snyk-results.json", "snyk-output.json", "results.json",
+        "security-results.json", "snyk-report.json"
     ]
     f = find_file(directory, candidates)
     return read_json(f)
 
 
 def load_sonar_results(directory):
-    """
-    Busca y carga los resultados de SonarQube desde el directorio dado.
-    """
     candidates = [
-        "sonar-report.json",
-        "sonar-results.json",
-        "project_status.json",
-        "sonar-quality.json",
-        "scan-report.json"
+        "sonar-report.json", "sonar-results.json", "project_status.json",
+        "sonar-quality.json", "scan-report.json"
     ]
     f = find_file(directory, candidates)
     return read_json(f)
 
 
-# ================================================================
-# Thresholds (umbrales de evaluación)
-# ================================================================
+# ======================================================================
+# Thresholds
+# ======================================================================
 
 def default_thresholds():
-    """
-    Devuelve los thresholds por defecto utilizados si no se proporciona
-    un archivo de umbrales personalizados.
-    """
     return {
         "snyk": {"critical": 0, "high": 5, "medium": 20},
         "sonarqube": {
@@ -140,258 +174,174 @@ def default_thresholds():
                 "max_reliability_rating": "C"
             }
         },
-        "approved_sonar_params": [
-            "sonar.coverage.exclusions",
-            "sonar.cpd.exclusions"
-        ]
+        "approved_sonar_params": ["sonar.coverage.exclusions", "sonar.cpd.exclusions"]
     }
 
 
 def merge_thresholds(base, overrides):
-    """
-    Mezcla los thresholds por defecto con thresholds personalizados.
-    """
     if not overrides:
         return base
-
-    merged = json.loads(json.dumps(base))  # deep copy
-
+    merged = json.loads(json.dumps(base))
     if "snyk" in overrides:
         merged["snyk"].update(overrides["snyk"])
-
     if "sonarqube" in overrides:
         merged["sonarqube"].update(overrides["sonarqube"])
-
     return merged
 
 
-# ================================================================
-# Evaluación Snyk
-# ================================================================
+# ======================================================================
+# Evaluation: Snyk
+# ======================================================================
 
 def evaluate_snyk(snyk_json, t):
-    """
-    Evalúa resultados de Snyk contra los thresholds:
-    - GATR-01 High
-    - GATR-02 Medium
-    - GATR-03 Critical
-    """
     results = []
     vulns = snyk_json.get("vulnerabilities", []) if snyk_json else []
 
-    sev_count = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    sev = {"critical": 0, "high": 0, "medium": 0}
 
     for v in vulns:
-        sev = v.get("severity", "").lower()
-        if sev in sev_count:
-            sev_count[sev] += 1
+        s = v.get("severity", "").lower()
+        if s in sev:
+            sev[s] += 1
 
-    # GATR-03: Vulnerabilidades críticas
-    status = "PASS" if sev_count["critical"] == min(t["snyk"]["critical"], 0) else "WARN"
+    # GATR-03 Critical
     results.append({
         "id": "gatr-03",
-        "status": status,
-        "critical_vulnerabilities": sev_count["critical"],
+        "status": "PASS" if sev["critical"] == t["snyk"]["critical"] else "WARN",
+        "count": sev["critical"],
         "threshold": t["snyk"]["critical"]
     })
 
-    # GATR-01: Vulnerabilidades altas
-    status = "PASS" if sev_count["high"] <= min(t["snyk"]["high"], 5) else "WARN"
+    # GATR-01 High
     results.append({
         "id": "gatr-01",
-        "status": status,
-        "high_vulnerabilities": sev_count["high"],
+        "status": "PASS" if sev["high"] <= t["snyk"]["high"] else "WARN",
+        "count": sev["high"],
         "threshold": t["snyk"]["high"]
     })
 
-    # GATR-02: Vulnerabilidades medias
-    status = "PASS" if sev_count["medium"] <= min(t["snyk"]["medium"],20) else "WARN"
+    # GATR-02 Medium
     results.append({
         "id": "gatr-02",
-        "status": status,
-        "medium_vulnerabilities": sev_count["medium"],
+        "status": "PASS" if sev["medium"] <= t["snyk"]["medium"] else "WARN",
+        "count": sev["medium"],
         "threshold": t["snyk"]["medium"]
     })
 
     return results
 
 
-# ================================================================
-# Evaluación SonarQube
-# ================================================================
+# ======================================================================
+# Evaluation: SonarQube
+# ======================================================================
 
 def evaluate_sonar(sonar_json, t, used_params):
-    """
-    Evalúa métricas de SonarQube:
-    - GATR-07 métricas generales
-    - GATR-08 Quality Gate
-    - GATR-09 parámetros permitidos
-    """
-    results = []
-
     if not sonar_json:
-        return [{
-            "id": "gatr-07",
-            "status": "WARN",
-            "message": "Sonar results missing"
-        }]
+        return [{"id": "gatr-07", "status": "WARN", "message": "Missing Sonar results"}]
 
     metrics = sonar_json.get("metrics", {})
     ratings = metrics.get("ratings", {})
 
-    # Métricas principales
-    coverage = metrics.get("coverage")
-    bugs = metrics.get("bugs")
-    vulns = metrics.get("vulnerabilities")
-    code_smells = metrics.get("code_smells")
-
-    # Ratings de calidad
-    security_rating = ratings.get("security")
-    reliability_rating = ratings.get("reliability")
-    maintainability_rating = ratings.get("maintainability")
-
     issues = []
 
-    # Validaciones contra thresholds
-    if coverage is not None and coverage < t["sonarqube"]["coverage"]:
-        issues.append(f"Coverage {coverage} < {t['sonarqube']['coverage']}")
+    def fail_if(cond, msg):
+        if cond:
+            issues.append(msg)
 
-    if bugs is not None and bugs > t["sonarqube"]["bugs"]:
-        issues.append(f"Bugs {bugs} > {t['sonarqube']['bugs']}")
+    fail_if(metrics.get("coverage") < t["sonarqube"]["coverage"],
+            f"Coverage {metrics.get('coverage')} < {t['sonarqube']['coverage']}")
 
-    if vulns is not None and vulns > t["sonarqube"]["vulnerabilities"]:
-        issues.append(f"Vulnerabilities {vulns} > {t['sonarqube']['vulnerabilities']}")
+    fail_if(metrics.get("bugs") > t["sonarqube"]["bugs"],
+            f"Bugs exceed {t['sonarqube']['bugs']}")
 
-    if code_smells is not None and code_smells > t["sonarqube"]["code_smells"]:
-        issues.append(f"Code smells {code_smells} > {t['sonarqube']['code_smells']}")
+    fail_if(metrics.get("vulnerabilities") > t["sonarqube"]["vulnerabilities"],
+            f"Vulns exceed {t['sonarqube']['vulnerabilities']}")
 
-    # Ratings (comparación estricta)
-    if security_rating is not None and security_rating != t["sonarqube"]["security_rating"]:
-        issues.append(f"Security rating {security_rating} != {t['sonarqube']['security_rating']}")
+    fail_if(metrics.get("code_smells") > t["sonarqube"]["code_smells"],
+            f"Code smells exceed {t['sonarqube']['code_smells']}")
 
-    if maintainability_rating is not None and maintainability_rating != t["sonarqube"]["maintainability_rating"]:
-        issues.append(f"Maintainability rating {maintainability_rating} != {t['sonarqube']['maintainability_rating']}")
+    fail_if(ratings.get("security") != t["sonarqube"]["security_rating"],
+            "Security rating mismatch")
 
-    if reliability_rating is not None and reliability_rating != t["sonarqube"]["reliability_rating"]:
-        issues.append(f"Reliability rating {reliability_rating} != {t['sonarqube']['reliability_rating']}")
+    fail_if(ratings.get("reliability") != t["sonarqube"]["reliability_rating"],
+            "Reliability rating mismatch")
 
-    # Agregar resultado GATR-07
-    results.append({
+    fail_if(ratings.get("maintainability") != t["sonarqube"]["maintainability_rating"],
+            "Maintainability rating mismatch")
+
+    # GATR-07
+    g07 = {
         "id": "gatr-07",
         "status": "PASS" if not issues else "WARN",
         "issues": issues
-    })
+    }
 
-    # GATR-08: calidad global de Sonar
+    # GATR-08 Quality Gate
     q_status = sonar_json.get("quality_gate", {}).get("status", "OK")
-    results.append({
+    g08 = {
         "id": "gatr-08",
-        "status": "FAIL" if q_status.upper() in ("ERROR", "FAIL") else "PASS",
+        "status": "FAIL" if q_status.upper() in ["ERROR", "FAIL"] else "PASS",
         "quality_gate_status": q_status
-    })
+    }
 
-    # GATR-09: validación de parámetros permitidos
+    # GATR-09 Allowed parameters
     disallowed = [p for p in used_params if p not in t["approved_sonar_params"]]
-    results.append({
+    g09 = {
         "id": "gatr-09",
         "status": "FAIL" if disallowed else "PASS",
-        "disallowed": disallowed,
-        "allowed": t["approved_sonar_params"]
-    })
+        "disallowed": disallowed
+    }
 
-    return results
+    return [g07, g08, g09]
 
 
-# ================================================================
-# Evaluación de rama
-# ================================================================
+# ======================================================================
+# GATR-14 Branch Validation
+# ======================================================================
 
-def evaluate_branch(ref, target_env):
-    """
-    Reglas GATR-14:
-      - Solo main o release/* pueden desplegar a UAT/PROD.
-      - DEV acepta cualquier rama.
-    """
-    allowed = ["refs/heads/main"]
-
+def evaluate_branch(ref, env):
     if ref.startswith("refs/heads/release/"):
-        return {"id": "gatr-14", "status": "PASS", "branch": ref, "env": target_env}
+        return {"id": "gatr-14", "status": "PASS", "branch": ref}
 
-    if target_env in ("PROD", "UAT") and ref not in allowed:
-        return {
-            "id": "gatr-14",
-            "status": "FAIL",
-            "branch": ref,
-            "env": target_env,
-            "message": "Only main or release/* can deploy to UAT/PROD"
-        }
+    if env in ("PROD", "UAT") and ref != "refs/heads/main":
+        return {"id": "gatr-14", "status": "FAIL", "branch": ref,
+                "message": "Only main or release/* allowed"}
 
-    return {"id": "gatr-14", "status": "PASS", "branch": ref, "env": target_env}
+    return {"id": "gatr-14", "status": "PASS", "branch": ref}
 
 
-# ================================================================
-# GATR-10 – Evaluación del Carril Exprés
-# ================================================================
+# ======================================================================
+# GATR-10 Express Lane
+# ======================================================================
 
 def evaluate_express_lane(sonar_json, t):
-    """
-    Evalúa los criterios de 'Express Lane' (GATR-10).
-    Esta puerta es consultiva (NON_ENFORCING):
-      → SOLO produce PASS o WARN.
-      → NUNCA produce FAIL.
-    
-    Condiciones WARN (si CUALQUIERA se cumple):
-      - cobertura < 80%
-      - éxito de pruebas < 80%
-      - security_rating > B
-      - reliability_rating > C
-      - new_security_rating != A
-      - new_reliability_rating != A
-    """
     if not sonar_json:
-        return {
-            "id": "gatr-10",
-            "status": "WARN",
-            "message": "Sonar results missing for express-lane evaluation"
-        }
+        return {"id": "gatr-10", "status": "WARN", "message": "Missing Sonar"}
 
     metrics = sonar_json.get("metrics", {})
     ratings = metrics.get("ratings", {})
-    new_ratings = metrics.get("new_ratings", {})  # si existe
+    new = metrics.get("new_ratings", {})
 
-    express = t["sonarqube"]["express_lane"]
-
+    e = t["sonarqube"]["express_lane"]
     issues = []
 
-    # --- Métricas numéricas ---
-    coverage = metrics.get("coverage")
-    test_success = metrics.get("test_success_rate")
+    if metrics.get("coverage") < e["coverage_threshold"]:
+        issues.append("Coverage too low")
 
-    if coverage is not None and coverage < express["coverage_threshold"]:
-        issues.append(f"Coverage {coverage}% < {express['coverage_threshold']}%")
+    if metrics.get("test_success_rate") < e["test_success_threshold"]:
+        issues.append("Test success too low")
 
-    if test_success is not None and test_success < express["test_success_threshold"]:
-        issues.append(f"Test success {test_success}% < {express['test_success_threshold']}%")
+    if ratings.get("security") > e["max_security_rating"]:
+        issues.append("Security rating too low")
 
-    # --- Ratings generales ---
-    security_rating = ratings.get("security")
-    reliability_rating = ratings.get("reliability")
+    if ratings.get("reliability") > e["max_reliability_rating"]:
+        issues.append("Reliability rating too low")
 
-    if security_rating and security_rating > express["max_security_rating"]:
-        issues.append(f"Security rating {security_rating} worse than {express['max_security_rating']}")
+    if new.get("security") not in (None, "A"):
+        issues.append("New-code security != A")
 
-    if reliability_rating and reliability_rating > express["max_reliability_rating"]:
-        issues.append(f"Reliability rating {reliability_rating} worse than {express['max_reliability_rating']}")
-
-    # --- "New Code" ratings (si existen) ---
-    new_security = new_ratings.get("security")
-    new_reliability = new_ratings.get("reliability")
-
-    if new_security and new_security != "A":
-        issues.append(f"New security rating {new_security} != A")
-
-    if new_reliability and new_reliability != "A":
-        issues.append(f"New reliability rating {new_reliability} != A")
+    if new.get("reliability") not in (None, "A"):
+        issues.append("New-code reliability != A")
 
     return {
         "id": "gatr-10",
@@ -400,38 +350,26 @@ def evaluate_express_lane(sonar_json, t):
     }
 
 
-# ================================================================
-# Decisión final
-# ================================================================
+# ======================================================================
+# FINAL DECISION
+# ======================================================================
 
 def decide_final(gates):
-    """
-    Calcula la decisión final del gate:
-        FAIL → Si algún gate crítico (08, 09, 14) falla
-        WARN → Si no hay fallos, pero sí advertencias
-        PASS → Si todo está OK
-    """
     enforcing = {"gatr-08", "gatr-09", "gatr-14"}
     final = "PASS"
-
     for g in gates:
         if g["id"] in enforcing and g["status"] == "FAIL":
-            return "FAIL"
+            return "FAIL_PENDING_EXCEPTION"
         if g["status"] == "WARN" and final == "PASS":
             final = "WARN"
-
     return final
 
 
-# ================================================================
-# Main
-# ================================================================
+# ======================================================================
+# MAIN
+# ======================================================================
 
 def main():
-    """
-    Punto de entrada principal del script.
-    Maneja argumentos, ejecuta evaluaciones y genera el archivo final.
-    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--snyk")
     parser.add_argument("--sonar")
@@ -442,7 +380,7 @@ def main():
     parser.add_argument("--ref", default="refs/heads/main")
     args = parser.parse_args()
 
-    # Umbrales base + overrides
+    # Cargar thresholds
     base = default_thresholds()
     overrides = read_json(args.thresholds)
     thresholds = merge_thresholds(base, overrides)
@@ -459,14 +397,40 @@ def main():
     gates.extend(evaluate_sonar(sonar_json, thresholds, sonar_params))
     gates.append(evaluate_branch(args.ref, args.target))
 
-    # Decisión final
+    # Decisión sin excepciones
     final = decide_final(gates)
 
-    # Crear carpeta si no existe
+    # Si falla un gate ENFORCING → buscar excepción en Jira
+    if final == "FAIL_PENDING_EXCEPTION":
+        app_id = os.getenv("APP_ID", "unknown")
+        print("Checking Jira for exception approvals...")
+
+        failed = [
+            g for g in gates
+            if g["id"] in ("gatr-08", "gatr-09", "gatr-14") and g["status"] == "FAIL"
+        ]
+
+        exception_found = False
+
+        for g in failed:
+            r = jira_check_exception(g["id"], app_id)
+            if r.get("approved"):
+                g["status"] = "PASS_WITH_EXCEPTION"
+                g["exception_issue"] = r["issue_key"]
+                g["exception_expiry"] = r["expiry"]
+                exception_found = True
+                print(f"✔ Exception approved for {g['id']} ({r['issue_key']})")
+
+        if exception_found:
+            final = "PASS_WITH_EXCEPTION"
+        else:
+            final = "FAIL"
+
+    # Crear carpeta
     out_dir = Path(args.output).parent
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Guardar salida final
+    # Guardar salida
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump({"final_decision": final, "gates": gates}, f, indent=2)
 
