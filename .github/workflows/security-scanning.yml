@@ -85,14 +85,13 @@ jobs:
         run: |
           chmod +x ./scripts/snyk-command-map.py
           python3 ./scripts/snyk-command-map.py
-          echo "Resolved command: $SNYK_CMD"
-          echo "Detected stacks: $SNYK_STACKS"
-          echo ${{steps.detect-stack-backend.outputs.stack}}
 
       - name: Show Snyk command (Backend)
         shell: bash
         run: |
-          echo "Final command: $SNYK_CMD"
+          echo "Resolved command: $SNYK_CMD"
+          echo "Detected stacks: $SNYK_STACKS"
+          echo ${{steps.detect-stack-backend.outputs.stack}}
 
       - name: Run Snyk Code (SAST Backend)
         if: steps.detect-stack-backend.outputs.stack != 'docker'
