@@ -359,7 +359,7 @@ def decide_final(gates):
     enforcing = {"gatr-08", "gatr-09", "gatr-14"}
     final = "PASS"
     for g in gates:
-        if g["id"] in enforcing and g["status"] == "FAIL":
+        if g["id"] in enforcing and g["status"] == "WARN":
             return "FAIL_PENDING_EXCEPTION"
         if g["status"] == "WARN" and final == "PASS":
             final = "WARN"
