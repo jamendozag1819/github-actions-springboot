@@ -1,7 +1,4 @@
-name: "Security Scanning"
-permissions:
-  contents: read
-  security-events: write
+name: Security Scanning
 
 on:
   workflow_call:
@@ -16,141 +13,89 @@ on:
         required: true
       SNYK_ORG_ID:
         required: true
-      APP_ID:
-        required: true
       JIRA_URL:
         required: true
       JIRA_USER:
         required: true
       JIRA_API_TOKEN:
         required: true
+      APP_ID:
+        required: false
       JIRA_PROJECT:
-        required: true
+        required: false
 
     outputs:
-      critical-count: 
-        description: "Number of critical vulnerabilities found" 
-        value: ${{ jobs.security-scan.outputs.critical-count }} 
-      high-count: 
-        description: "Number of high vulnerabilities found" 
-        value: ${{ jobs.security-scan.outputs.high-count }} 
-      medium-count: 
-        description: "Number of medium vulnerabilities found"
-        value: ${{ jobs.security-scan.outputs.medium-count }} 
-      low-count: 
-        description: "Number of low vulnerabilities found" 
-        value: ${{ jobs.security-scan.outputs.low-count }} 
-      stack: 
-        description: "Detected technology stack" 
-        value: ${{ jobs.security-scan.outputs.stack }}
+      critical-count:
+        description: "Critical vulnerabilities count"
+        value: ${{ jobs.snyk.outputs.critical }}
+      high-count:
+        description: "High vulnerabilities count"
+        value: ${{ jobs.snyk.outputs.high }}
+      medium-count:
+        description: "Medium vulnerabilities count"
+        value: ${{ jobs.snyk.outputs.medium }}
+      low-count:
+        description: "Low vulnerabilities count"
+        value: ${{ jobs.snyk.outputs.low }}
 
 jobs:
-  security-scan:
-    name: Security Scan
+  snyk:
+    name: Run Snyk Security Scan
     runs-on: ubuntu-latest
 
     outputs:
-      critical-count: ${{ steps.security-summary-backend.outputs.critical-count }}
-      high-count:     ${{ steps.security-summary-backend.outputs.high-count }}
-      medium-count:   ${{ steps.security-summary-backend.outputs.medium-count }}
-      low-count:      ${{ steps.security-summary-backend.outputs.low-count }}
-      stack:          ${{ steps.export-stack.outputs.stack }}
+      critical: ${{ steps.extract.outputs.critical }}
+      high: ${{ steps.extract.outputs.high }}
+      medium: ${{ steps.extract.outputs.medium }}
+      low: ${{ steps.extract.outputs.low }}
 
     steps:
-
-      # -----------------------------------------
-      # Checkout
-      # -----------------------------------------
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -----------------------------------------
-      # Setup Java
-      # -----------------------------------------
-      - name: Setup Java and Maven
-        uses: ./.github/actions/setup-java-maven
+      - name: Setup Java
+        if: inputs.java-version != ''
+        uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: ${{ inputs.java-version }}
 
-      # -----------------------------------------
-      # Detect Stack
-      # -----------------------------------------
-      - name: Detect technology stack (Backend)
-        id: detect-stack-backend
+      - name: Install Python dependencies
         run: |
-          chmod +x ./scripts/snyk-tech.py
-          python3 ./scripts/snyk-tech.py
-          echo "Detected stack env: $SNYK_STACK"
+          sudo apt-get update -y
+          sudo apt-get install -y python3 python3-pip jq
 
-      - name: Export stack output
-        id: export-stack
-        run: |
-          echo "Exporting stack: $SNYK_STACK"
-          echo "stack=$SNYK_STACK" >> $GITHUB_OUTPUT
-
-      - name: Show detected stack
-        run: |
-          echo "Stack detected: ${{ steps.export-stack.outputs.stack }}"
-
-      # -----------------------------------------
-      # Map Command (solo para non-docker)
-      # -----------------------------------------
-      - name: Map Snyk command (Backend)
-        id: map-command-backend
-        run: |
-          chmod +x ./scripts/snyk-command-map.py
-          python3 ./scripts/snyk-command-map.py
-          echo "Resolved SNYK_CMD: $SNYK_CMD"
-
-      # -----------------------------------------
-      # SAST + SCA (cuando NO es docker)
-      # -----------------------------------------
-      - name: Run Snyk Code (SAST Backend)
-        if: steps.export-stack.outputs.stack != 'docker'
-        id: snyk-code-backend
+      - name: Run Snyk Scan (Composite Action)
         uses: ./.github/actions/snyk-code-analysis
         with:
           app-path: "."
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
-          snyk-branch: ${{ github.ref_name }}
-          gating-threshold-file: "./gating-configs/snyk_gating_thresholds_default.json"
-          snyk-project-name: "jamendozag1819_github-actions-springboot"
+          snyk-project-name: ${{ github.repository }}   # Ajusta si quieres un nombre distinto
 
-      - name: Run Snyk Test (SCA Backend)
-        if: steps.export-stack.outputs.stack != 'docker'
-        id: snyk-test-backend
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+      - name: Extract Snyk results for Gates
+        id: extract
         run: |
-          echo "Running Snyk SCA with command: $SNYK_CMD"
+          echo "Extracting vulnerabilities from snyk-report.json"
+          
+          CRIT=$(jq '[ .vulnerabilities[] | select(.severity == "critical") ] | length' snyk-report.json)
+          HIGH=$(jq '[ .vulnerabilities[] | select(.severity == "high") ] | length' snyk-report.json)
+          MED=$(jq '[ .vulnerabilities[] | select(.severity == "medium") ] | length' snyk-report.json)
+          LOW=$(jq '[ .vulnerabilities[] | select(.severity == "low") ] | length' snyk-report.json)
 
-          $SNYK_CMD \
-            --org="${SNYK_ORG_ID}" \
-            --json-file-output="snyk-scanning/results/snyk-results.json" \
-            --token="${SNYK_TOKEN}" || true
+          echo "critical=$CRIT" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MED" >> $GITHUB_OUTPUT
+          echo "low=$LOW" >> $GITHUB_OUTPUT
 
-      # -----------------------------------------
-      # Container Scan (solo docker)
-      # -----------------------------------------
-      - name: Run Snyk Test (Docker)
-        if: steps.export-stack.outputs.stack == 'docker'
-        id: snyk-test-docker
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+      - name: Print Snyk Summary
         run: |
-          echo "Running Snyk Container Test for image myapp:${{ github.sha }}"
-          snyk container test myapp:${{ github.sha }} \
-            --file=Dockerfile \
-            --org="${SNYK_ORG_ID}" \
-            --json-file-output="snyk-scanning/results/snyk-results.json" \
-            --token="${SNYK_TOKEN}" || true
+          echo "===================================="
+          echo "          Snyk Summary"
+          echo "===================================="
+          echo "Critical : ${{ steps.extract.outputs.critical }}"
+          echo "High     : ${{ steps.extract.outputs.high }}"
+          echo "Medium   : ${{ steps.extract.outputs.medium }}"
+          echo "Low      : ${{ steps.extract.outputs.low }}"
+          echo "===================================="
 
-      - name: Upload security results (Docker)
-        if: steps.export-stack.outputs.stack == 'docker'
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-results
-          path: snyk-scanning/results/snyk-results.json

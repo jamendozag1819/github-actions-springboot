@@ -1,22 +1,17 @@
-# ============================================================
-#  Code Quality Analysis
-#  Análisis de calidad de código con SonarCloud / SonarQube
-# ============================================================
+name: SonarQube Cloud Analysis
 
-name: 'Code Quality Analysis'
-
-# ------------------------------------------------------------
-#  ACTIVACIÓN DEL WORKFLOW
-# ------------------------------------------------------------
 on:
-  workflow_call:      # Este workflow es llamado desde otros pipelines
+  workflow_call:
     inputs:
       java-version:
-        description: 'Versión de Java a utilizar en el análisis'
-        required: false
+        description: "Java version to use"
+        required: true
         type: string
-        default: '17'
-
+      project-key:
+        description: "Sonar Project Key"
+        required: false
+        default: ${{ secrets.SONAR_PROJECT_KEY }}
+        type: string
     secrets:
       SONAR_TOKEN:
         required: true
@@ -25,74 +20,67 @@ on:
       SONAR_PROJECT_KEY:
         required: true
 
-    # Valores retornados al workflow que lo llama
-    outputs:
-      quality-gate-status:
-        description: 'Estado final del Quality Gate (PASSED/FAILED/UNKNOWN)'
-        value: ${{ jobs.code-quality.outputs.quality-gate-status }}
-
-      sonarqube-configured:
-        description: 'Indica si SonarQube está correctamente configurado'
-        value: ${{ jobs.code-quality.outputs.sonarqube-configured }}
-
-      sonar-gate-exit-code:
-        description: 'Código de salida generado por el Quality Gate'
-        value: ${{ jobs.code-quality.outputs.sonar-gate-exit-code }}
-
-# ------------------------------------------------------------
-#  JOB: Análisis de SonarCloud
-# ------------------------------------------------------------
 jobs:
 
-  code-quality:
-    name: SonarCloud Analysis (Multistack)
+  sonar-analysis:
+    name: SonarQube Code Quality Scan
     runs-on: ubuntu-latest
 
-    # Valores exportados por el job
-    outputs:
-      quality-gate-status: ${{ steps.sonar_scan.outputs.quality_gate_status }}
-      sonarqube-configured: ${{ steps.sonar_scan.outputs.sonarqube_configured }}
-      sonar-gate-exit-code: ${{ steps.sonar_scan.outputs.sonar_gate_exit_code }}
-
     steps:
-
-      # ------------------------------------------------------
-      # 1. Descargar el código fuente
-      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Ejecutar pruebas con JaCoCo
-      - name: Run Unit Tests
+      # -----------------------------
+      # Setup Java
+      # -----------------------------
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ inputs.java-version }}
+
+      # -----------------------------
+      # Install Sonar Scanner
+      # -----------------------------
+      - name: Install Sonar Scanner
         run: |
-         mvn -B clean verify
+          curl -sSLo sonar.zip \
+            https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar.zip -d $HOME
+          mv $HOME/sonar-scanner-* $HOME/sonar-scanner
+          echo "$HOME/sonar-scanner/bin" >> $GITHUB_PATH
 
-      # ------------------------------------------------------
-      # 2. Ejecutar análisis de SonarCloud
-      #    Acción compuesta que autodescubre la tecnología
-      # ------------------------------------------------------
-      - name: Run Sonar Code Analysis (Composite Action)
-        id: sonar_scan
-        uses: ./.github/actions/sonar-code-analysis
-        with:
-          app-path: "."                     # Ruta del proyecto
-          sonar-host-url: "https://sonarcloud.io"
-          tech-version: ${{ inputs.java-version }}
-          project-path: "."                 # Ejecuta análisis desde raíz
-          sonar-token: ${{ secrets.SONAR_TOKEN }}
-          sonar-organization: ${{ secrets.SONAR_ORGANIZATION }}
-          sonar-project-key: ${{ secrets.SONAR_PROJECT_KEY }}
-          sonar-branch: ${{ github.ref_name }}
-          app-techstack: "auto"             # Autodetección del stack
+      # -----------------------------
+      # Run Sonar Scan
+      # -----------------------------
+      - name: Run Sonar Scanner
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORG: ${{ secrets.SONAR_ORGANIZATION }}
+          SONAR_PROJECT: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          echo "Running Sonar scanner..."
+          sonar-scanner \
+            -Dsonar.organization="${SONAR_ORG}" \
+            -Dsonar.projectKey="${SONAR_PROJECT}" \
+            -Dsonar.sources=./ \
+            -Dsonar.host.url="https://sonarcloud.io" \
+            -Dsonar.login="${SONAR_TOKEN}"
 
-      # ------------------------------------------------------
-      # 3. Subir como artefacto los resultados del escaneo
-      #    (usado después por el gate evaluator)
-      # ------------------------------------------------------
-      - name: Upload quality results
-        uses: actions/upload-artifact@v4
-        with:
-          name: quality-results                      # Nombre del artefacto
-          path: sonarqube-cloud-scanning/results     # Carpeta donde están los JSON
-          if-no-files-found: warn
-          retention-days: 1                          # Mantener 1 días
+      # -----------------------------
+      # Wait for Quality Gate + Metrics
+      # -----------------------------
+      - name: Run Sonar Quality Gate + Threshold Check
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          echo "Running Sonar gating script..."
+          python3 scripts/sonar_gating.py \
+            --sonar-host "https://sonarcloud.io" \
+            --token "${SONAR_TOKEN}" \
+            --project-key "${SONAR_PROJECT}" \
+            --threshold-file "gating-configs/sonar_thresholds.json" \
+            --wait \
+            --branch "${GITHUB_REF#refs/heads/}"
