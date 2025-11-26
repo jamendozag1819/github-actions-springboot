@@ -149,6 +149,13 @@ jobs:
             --json-file-output="snyk-scanning/results/snyk-results.json" \
             --token="${SNYK_TOKEN}" || true
 
+      - name: Upload security results (Docker)
+        if: steps.export-stack.outputs.stack == 'docker'
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-results
+          path: snyk-scanning/results/snyk-results.json
+
       # -----------------------------------------
       # Summary (ALWAYS)
       # -----------------------------------------
