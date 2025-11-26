@@ -97,7 +97,6 @@ jobs:
       # -----------------------------------------
       - name: Map Snyk command (Backend)
         id: map-command-backend
-        if: steps.export-stack.outputs.stack != 'docker'
         run: |
           chmod +x ./scripts/snyk-command-map.py
           python3 ./scripts/snyk-command-map.py
