@@ -62,6 +62,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Ejecutar pruebas con JaCoCo
+      - name: Run Unit Tests
+        run: |
+         mvn -B clean verify
+
       # ------------------------------------------------------
       # 2. Ejecutar análisis de SonarCloud
       #    Acción compuesta que autodescubre la tecnología
