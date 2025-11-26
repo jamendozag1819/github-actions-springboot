@@ -42,7 +42,7 @@ elif glob.glob("*.xcodeproj") or exists("Podfile"):
     stack = "ios"
 
 
-print(f"Detected Stack: {stack}")
+print(f"Detected Stack tech: {stack}")
 
 github_env = os.getenv("GITHUB_ENV")
 if github_env:
