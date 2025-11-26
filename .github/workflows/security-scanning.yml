@@ -17,6 +17,7 @@ on:
       SNYK_ORG_ID:
         required: true
 
+
     outputs:
       critical-count: ${{ jobs.security-scan.outputs.critical-count }}
       high-count:     ${{ jobs.security-scan.outputs.high-count }}
