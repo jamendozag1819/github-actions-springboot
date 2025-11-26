@@ -50,7 +50,7 @@ def jira_check_exception(gate_id, app_id):
     JIRA_URL = os.getenv("JIRA_URL")
     JIRA_USER = os.getenv("JIRA_USER")
     JIRA_TOKEN = os.getenv("JIRA_API_TOKEN")
-    JIRA_PROJECT = os.getenv("JIRA_PROJECT", "GATES")
+    JIRA_PROJECT = os.getenv("JIRA_PROJECT", "SCRUM")
 
     if not all([JIRA_URL, JIRA_USER, JIRA_TOKEN]):
         print("⚠ Jira integration not configured. Skipping.")
@@ -411,7 +411,7 @@ def main():
 
         failed = [
             g for g in gates
-            if g["id"] in ("gatr-07","gatr-08", "gatr-09", "gatr-14") and g["status"] == "WARN"
+            if g["id"] in ("gatr-07","gatr-08", "gatr-09", "gatr-14") and g["status"] == "FAIL"
         ]
         print(f"Failed enforcing gates: {[g['id'] for g in failed]}")
 
