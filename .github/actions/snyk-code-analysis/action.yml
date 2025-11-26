@@ -94,5 +94,5 @@ runs:
           --org-id "${SNYK_ORG}" \
           --project-name "${SNYK_PROJECT}" \
           --token "${SNYK_TOKEN}" \
-          --threshold-file "${GITHUB_ACTION_PATH}/../../../gating-configs/snyk_gating_thresholds.json" \
+          --threshold-file ./gating-configs/snyk_gating_thresholds.json \
           --report-file "${{ inputs.app-path }}/snyk-report.json"
