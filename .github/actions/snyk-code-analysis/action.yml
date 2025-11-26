@@ -89,7 +89,7 @@ runs:
       run: |
         
         echo " Running Snyk gating check for project ${SNYK_PROJECT}..."
-        python3 "${GITHUB_ACTION_PATH}/snyk_gating.py" \
+        python3 ./.github/actions/snyk-code-analysis/snyk_gating.py \
           --api-url "https://api.snyk.io" \
           --org-id "${SNYK_ORG}" \
           --project-name "${SNYK_PROJECT}" \
