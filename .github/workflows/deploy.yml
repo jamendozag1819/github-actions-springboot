@@ -1,26 +1,21 @@
 # ============================================================
 #  CI/CD PIPELINE
-#  Flujo principal que:
-#    - Construye la imagen Docker
-#    - Ejecuta análisis de seguridad (Snyk)
-#    - Ejecuta análisis de calidad (SonarCloud)
-#    - Evalúa las puertas de seguridad/gobernanza (Gates)
-#    - Genera un reporte consolidado
 # ============================================================
 
 name: CI/CD Pipeline
 
 permissions:
   contents: read
-  security-events: write     # Requerido para reportar hallazgos de seguridad
+  security-events: write
+
 # ------------------------------------------------------------
 #  EVENTOS QUE DISPARAN EL WORKFLOW
 # ------------------------------------------------------------
 on:
   push:
-    branches: [ main, "*release*" ]     # Ejecutar en main y ramas release/*
+    branches: [ "main", "*release*" ]
   pull_request:
-    branches: [ main, "*release*" ]     # PR hacia main o release
+    branches: [ "main", "*release*" ]
   workflow_dispatch:
     inputs:
       override_gates:
@@ -29,14 +24,10 @@ on:
         default: "false"
         type: choice
         options: [ "false", "true" ]
+
 env:
   JAVA_VERSION: "17"
   MAVEN_VERSION: "3.8.6"
-   
-# ------------------------------------------------------------
-#  VARIABLES GLOBALES DEL PIPELINE
-# ------------------------------------------------------------
-
 
 # ------------------------------------------------------------
 #  JOBS DEL PIPELINE
@@ -57,7 +48,16 @@ jobs:
       - name: Build docker image
         run: |
           docker build -t myapp:${{ github.sha }} .
+          echo "IMAGE_TAG=myapp:${{ github.sha }}" >> $GITHUB_ENV
 
+      - name: Save image as artifact
+        run: docker save myapp:${{ github.sha }} -o myapp.tar
+
+      - name: Upload docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: myapp-image
+          path: myapp.tar
 
   # ==========================================================
   # 2. SECURITY SCAN – Snyk (SCA, SAST, Container)
