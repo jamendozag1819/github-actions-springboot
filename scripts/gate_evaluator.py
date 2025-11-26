@@ -400,7 +400,7 @@ def main():
 
     # Decisión sin excepciones
     final = decide_final(gates)
-
+    print("Gates : ",gates)
     # Si falla un gate ENFORCING → buscar excepción en Jira
     if final == "FAIL_PENDING_EXCEPTION":
         app_id = os.getenv("APP_ID", "unknown")
