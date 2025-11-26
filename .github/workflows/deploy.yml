@@ -33,11 +33,7 @@ on:
   env:
    JAVA_VERSION: "17"
    MAVEN_VERSION: "3.8.6"
-   APP_ID: "microservice-moc-app"
-   JIRA_URL: ${{ secrets.JIRA_URL }}
-   JIRA_USER: ${{ secrets.JIRA_USER }}
-   JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
-   JIRA_PROJECT: "GATES"
+   
 # ------------------------------------------------------------
 #  VARIABLES GLOBALES DEL PIPELINE
 # ------------------------------------------------------------
@@ -74,8 +70,11 @@ jobs:
     with:
       java-version: "17"
     secrets:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+      APP_ID: "APP123"
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_USER: ${{ secrets.JIRA_USER }}
+      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+      JIRA_PROJECT: "SCRUM"
 
 
 
