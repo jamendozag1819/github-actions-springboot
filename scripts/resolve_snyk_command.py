@@ -14,7 +14,7 @@ SNYK_COMMAND_MAP = {
     "angular": "snyk test --all-projects",
     "nodejs": "snyk test",
     "python": "snyk test",
-    "docker": "snyk test --docker Dockerfile"
+    "docker": "snyk container test"
 }
 
 DEFAULT_CMD = "snyk test"

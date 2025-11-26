@@ -71,11 +71,11 @@ runs:
         
         echo "Running: $SNYK_CMD"
 
-        $SNYK_CMD \
+        $SNYK_CMD myapp:${{ github.sha }} --file=Dockerfile\
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true \
-          --token="${SNYK_TOKEN}" || true \
+          --token="${SNYK_TOKEN}" \
           --api="${SNYK_API_URL}" || true
 
         cat snyk-report.json
