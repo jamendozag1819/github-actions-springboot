@@ -93,7 +93,7 @@ jobs:
       - name: Show Snyk command (Backend)
         shell: bash
         run: |
-          echo "stack=$SNYK_CMD" >> $GITHUB_OUTPUT
+          echo "SNYK_CMD=$SNYK_CMD" >> $GITHUB_OUTPUT
           echo "Resolved command: $SNYK_CMD"
           echo "Detected stacks: $SNYK_STACKS"
           echo ${{steps.detect-stack-backend.outputs.stack}}
