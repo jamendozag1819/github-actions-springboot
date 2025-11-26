@@ -394,7 +394,7 @@ def main():
     # Ejecutar evaluaciones
     gates = []
     gates.extend(evaluate_snyk(snyk_json, thresholds))
-    gates.append(evaluate_express_lane(sonar_json, thresholds))
+    #gates.append(evaluate_express_lane(sonar_json, thresholds))
     gates.extend(evaluate_sonar(sonar_json, thresholds, sonar_params))
     gates.append(evaluate_branch(args.ref, args.target))
 

@@ -155,12 +155,3 @@ jobs:
         with:
           name: security-results
           path: snyk-scanning/results/snyk-results.json
-
-      # -----------------------------------------
-      # Summary (ALWAYS)
-      # -----------------------------------------
-      - name: Generate security summary (Backend)
-        id: security-summary-backend
-        uses: ./.github/actions/generate-security-summary
-        with:
-          results-file: snyk-scanning/results/snyk-results.json
