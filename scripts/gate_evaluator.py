@@ -326,47 +326,22 @@ def evaluate_express_lane(sonar_json, t):
     e = t["sonarqube"]["express_lane"]
     issues = []
 
-    # ----------------------------
-    # Coverage
-    # ----------------------------
-    cov = metrics.get("coverage")
-    if cov is not None and cov < e["coverage_threshold"]:
+    if metrics.get("coverage") < e["coverage_threshold"]:
         issues.append("Coverage too low")
 
-    # ----------------------------
-    # Test success rate
-    # (Fix: evitar comparar None < int)
-    # ----------------------------
-    ts = metrics.get("test_success_rate")
-    if ts is not None and ts < e["test_success_threshold"]:
+    if metrics.get("test_success_rate") < e["test_success_threshold"]:
         issues.append("Test success too low")
 
-    # ----------------------------
-    # Security rating
-    # ----------------------------
-    sec = ratings.get("security")
-    if sec is not None and sec > e["max_security_rating"]:
+    if ratings.get("security") > e["max_security_rating"]:
         issues.append("Security rating too low")
 
-    # ----------------------------
-    # Reliability rating
-    # ----------------------------
-    rel = ratings.get("reliability")
-    if rel is not None and rel > e["max_reliability_rating"]:
+    if ratings.get("reliability") > e["max_reliability_rating"]:
         issues.append("Reliability rating too low")
 
-    # ----------------------------
-    # New code: security
-    # ----------------------------
-    new_sec = new.get("security")
-    if new_sec is not None and new_sec != "A":
+    if new.get("security") not in (None, "A"):
         issues.append("New-code security != A")
 
-    # ----------------------------
-    # New code: reliability
-    # ----------------------------
-    new_rel = new.get("reliability")
-    if new_rel is not None and new_rel != "A":
+    if new.get("reliability") not in (None, "A"):
         issues.append("New-code reliability != A")
 
     return {
