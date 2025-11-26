@@ -60,11 +60,6 @@ jobs:
           distribution: temurin
           java-version: ${{ inputs.java-version }}
 
-      - name: Install Python dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y python3 python3-pip jq
-
       - name: Run Snyk Scan (Composite Action)
         uses: ./.github/actions/snyk-code-analysis
         with:
