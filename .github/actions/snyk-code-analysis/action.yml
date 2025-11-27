@@ -61,6 +61,7 @@ runs:
 
         $SNYK_CMD "$IMAGE_TAG" --file=Dockerfile \
           --org="${{ inputs.snyk-org }}" \
+          --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true
 
         ls -lh snyk-report.json || echo "❌ snyk-report.json NOT GENERATED"
