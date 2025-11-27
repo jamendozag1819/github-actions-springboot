@@ -28,7 +28,9 @@ def fetch_json(url, token):
 def get_quality_gate_status(sonar_url, project_key, token):
     """Fetch project quality gate status."""
     url = f"{sonar_url}/api/qualitygates/project_status?projectKey={project_key}"
-    return fetch_json(url, token)
+    json = fetch_json(url, token)
+    print(f"json response '{json}'")
+    return json
 
 
 def get_project_metrics(sonar_url, project_key, token):
@@ -100,7 +102,9 @@ def compare_metrics(metrics, thresholds, quality_status, sonar_url, project_key,
     rating = metrics["security_rating"]
     reliability = metrics.get("reliability_rating", "?")
     maintainability = metrics.get("sqale_rating", "?")
-
+    
+    
+    
     # Default thresholds
     min_coverage = thresholds.get("coverage", 0)
     max_bugs = thresholds.get("bugs", 0)
