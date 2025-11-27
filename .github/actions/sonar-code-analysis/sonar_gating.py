@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Sonar + Governance Gates (gatr-08, gatr-09, gatr-14)
+# Sonar + Governance Gates + Jira Exceptions (gatr-08, gatr-09, gatr-14)
 
 import os
 import sys
@@ -10,34 +10,78 @@ import urllib.request
 import urllib.error
 import base64
 import re
+from datetime import datetime
 
 
-# ------------------------------------------------------------
-#  HTTP Requests
-# ------------------------------------------------------------
-def fetch_json(url, token):
+# ============================================================
+# HTTP JSON Request (Sonar & Jira use the same)
+# ============================================================
+def fetch_json(url, username=None, token=None):
     try:
         req = urllib.request.Request(url)
-        auth_header = "Basic " + base64.b64encode(f"{token}:".encode()).decode()
-        req.add_header("Authorization", auth_header)
+
+        if username and token:
+            # Jira uses user:token
+            auth_str = f"{username}:{token}".encode()
+        elif token:
+            # Sonar uses token:
+            auth_str = f"{token}:".encode()
+        else:
+            auth_str = None
+
+        if auth_str:
+            auth_header = "Basic " + base64.b64encode(auth_str).decode()
+            req.add_header("Authorization", auth_header)
 
         with urllib.request.urlopen(req, timeout=30) as response:
             return json.load(response)
 
-    except urllib.error.HTTPError as e:
-        return {"error": f"HTTPError {e.code}: {e.reason}"}
-    except urllib.error.URLError as e:
-        return {"error": f"Connection error: {e.reason}"}
     except Exception as e:
         return {"error": str(e)}
 
 
-# ------------------------------------------------------------
-#  Sonar API
-# ------------------------------------------------------------
+# ============================================================
+# Jira Search for Exception Approval
+# ============================================================
+def jira_check_exception(jira_url, jira_user, jira_token, gate_id, app_id):
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    jql = (
+        f'project = GATES AND '
+        f'cf_gate_id = "{gate_id}" AND '
+        f'cf_application_id = "{app_id}" AND '
+        f'cf_exception_approval_status = "DECISION MADE" AND '
+        f'cf_exception_approval_decision = "Approved" AND '
+        f'cf_exception_expiry_date >= "{today}"'
+    )
+
+    url = f"{jira_url}/rest/api/3/search?jql={urllib.parse.quote(jql)}"
+    data = fetch_json(url, username=jira_user, token=jira_token)
+
+    if "error" in data:
+        return {"status": "ERROR", "message": data["error"]}
+
+    issues = data.get("issues", [])
+
+    if len(issues) > 0:
+        issue = issues[0]
+        expiry = issue["fields"].get("cf_exception_expiry_date", "unknown")
+
+        return {
+            "status": "PASS_WITH_EXCEPTION",
+            "exception_id": issue["key"],
+            "expiry_date": expiry
+        }
+
+    return {"status": "NO_EXCEPTION"}
+
+
+# ============================================================
+# Sonar API Functions
+# ============================================================
 def get_quality_gate_status(sonar_url, project_key, token):
     url = f"{sonar_url}/api/qualitygates/project_status?projectKey={project_key}"
-    return fetch_json(url, token)
+    return fetch_json(url, token=token)
 
 
 def get_project_metrics(sonar_url, project_key, token):
@@ -46,188 +90,155 @@ def get_project_metrics(sonar_url, project_key, token):
         "coverage", "duplicated_lines_density",
         "security_rating", "reliability_rating", "sqale_rating"
     ])
-
     url = f"{sonar_url}/api/measures/component?component={project_key}&metricKeys={metrics}"
-    return fetch_json(url, token)
+    return fetch_json(url, token=token)
 
 
 def extract_metric(data, metric_name):
     try:
-        measures = data.get("component", {}).get("measures", [])
-        for m in measures:
+        for m in data.get("component", {}).get("measures", []):
             if m.get("metric") == metric_name:
                 return m.get("value", "0")
-    except Exception:
+    except:
         pass
     return "0"
 
 
 def convert_rating(value):
-    mapping = {
-        "A": 1, "1": 1,
-        "B": 2, "2": 2,
-        "C": 3, "3": 3,
-        "D": 4, "4": 4,
-        "E": 5, "5": 5
-    }
+    mapping = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5}
     return mapping.get(str(value).upper(), 5)
 
 
-# ------------------------------------------------------------
-#  Gate gatr-08 — CODE QUALITY
-# ------------------------------------------------------------
+# ============================================================
+# Gate gatr-08 — Code Quality (blockers)
+# ============================================================
 def evaluate_gatr_08(quality_gate_json):
     status = quality_gate_json.get("projectStatus", {}).get("status", "NONE")
     conditions = quality_gate_json.get("projectStatus", {}).get("conditions", [])
 
-    blocker_issues = [
+    blockers = [
         c for c in conditions
-        if "blocker" in c.get("metricKey", "") and c.get("status") == "ERROR"
+        if ("blocker" in c.get("metricKey", "")) and c.get("status") == "ERROR"
     ]
 
-    if status == "ERROR" and blocker_issues:
-        return {
-            "gate": "gatr-08",
-            "status": "FAIL",
-            "reason": "Blocker issues detected",
-            "blockers": blocker_issues,
-            "jira_required": True
-        }
+    if status == "ERROR" and blockers:
+        return {"status": "FAIL", "reason": "Blocker issues detected"}
 
-    return {"gate": "gatr-08", "status": "PASS"}
+    return {"status": "PASS"}
 
 
-# ------------------------------------------------------------
-# Gate gatr-09 — APPROVED SONAR PARAMETERS
-# ------------------------------------------------------------
-ALLOWED_PARAMS = [
-    "sonar.coverage.exclusions",
-    "sonar.cpd.exclusions"
-]
+# ============================================================
+# Gate gatr-09 — Approved Sonar Parameters
+# ============================================================
+ALLOWED_PARAMS = ["sonar.coverage.exclusions", "sonar.cpd.exclusions"]
 
-BLOCKED_PARAMS = [
-    "sonar.exclusions",
-    "sonar.skip",
-    "sonar.test.exclusions"
-]
+BLOCKED_PARAMS = ["sonar.exclusions", "sonar.skip", "sonar.test.exclusions"]
 
 
 def evaluate_gatr_09():
-    used_params = []
+    used = []
 
     if os.path.exists("sonar-project.properties"):
         with open("sonar-project.properties") as f:
             for line in f:
                 if line.strip().startswith("sonar."):
                     key = line.split("=")[0].strip()
-                    used_params.append(key)
+                    used.append(key)
 
     disallowed = [
-        p for p in used_params
+        p for p in used
         if p in BLOCKED_PARAMS or (p.startswith("sonar.") and p not in ALLOWED_PARAMS)
     ]
 
     if disallowed:
-        return {
-            "gate": "gatr-09",
-            "status": "FAIL",
-            "disallowed": disallowed,
-            "allowed": ALLOWED_PARAMS,
-            "reason": "Disallowed Sonar parameters detected"
-        }
+        return {"status": "FAIL", "reason": "Disallowed parameters", "params": disallowed}
 
-    return {"gate": "gatr-09", "status": "PASS"}
+    return {"status": "PASS"}
 
 
-# ------------------------------------------------------------
-# Gate gatr-14 — RELEASE BRANCH VALIDATION
-# ------------------------------------------------------------
+# ============================================================
+# Gate gatr-14 — Branch Policy
+# ============================================================
 def evaluate_gatr_14(branch, environment):
     if environment not in ("UAT", "PROD"):
-        return {"gate": "gatr-14", "status": "PASS"}
+        return {"status": "PASS"}
 
-    allowed_patterns = [
-        r"^main$",
-        r"^release\/.*$"
+    allowed = [
+        r"^main$", r"^release\/.*$"
     ]
 
-    allowed = any(re.match(p, branch) for p in allowed_patterns)
-
-    if not allowed:
+    if not any(re.match(p, branch) for p in allowed):
         return {
-            "gate": "gatr-14",
             "status": "FAIL",
-            "branch": branch,
-            "env": environment,
-            "reason": "Only main or release/* branches can deploy to UAT/PROD"
+            "reason": "Branch not allowed for UAT/PROD",
+            "branch": branch
         }
 
-    return {"gate": "gatr-14", "status": "PASS"}
+    return {"status": "PASS"}
 
 
-# ------------------------------------------------------------
-# Main — Executes all gates
-# ------------------------------------------------------------
+# ============================================================
+# MAIN
+# ============================================================
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sonar-host", required=True)
     parser.add_argument("--token", required=True)
     parser.add_argument("--project-key", required=True)
     parser.add_argument("--threshold-file", required=True)
-    parser.add_argument("--branch", default="unknown")
-    parser.add_argument("--wait", action="store_true")
+    parser.add_argument("--branch", required=True)
     parser.add_argument("--environment", default="DEV")
+    parser.add_argument("--jira-url")
+    parser.add_argument("--jira-user")
+    parser.add_argument("--jira-token")
+    parser.add_argument("--app-id", required=True)
 
     args = parser.parse_args()
 
-    sonar_url = args.sonar_host.rstrip("/")
-    token = args.token
-    project = args.project_key
+    # 1) Fetch Sonar gate
+    data = get_quality_gate_status(args.sonar_host, args.project_key, args.token)
 
-    # -------------------------
-    # Pull quality gate
-    # -------------------------
-    if args.wait:
-        for _ in range(60):
-            data = get_quality_gate_status(sonar_url, project, token)
-            status = data.get("projectStatus", {}).get("status")
-            if status != "NONE":
-                break
-            time.sleep(5)
-    else:
-        data = get_quality_gate_status(sonar_url, project, token)
+    # gatr-08
+    r08 = evaluate_gatr_08(data)
+    if r08["status"] == "FAIL":
+        print("❌ gatr-08 FAILED:", r08["reason"])
 
-    # -------------------------
-    # Gate gatr-08
-    # -------------------------
-    result_08 = evaluate_gatr_08(data)
+        # Jira Exception Check
+        exc = jira_check_exception(args.jira_url, args.jira_user, args.jira_token,
+                                   gate_id="gatr-08", app_id=args.app_id)
 
-    if result_08["status"] == "FAIL":
-        print("\n❌ gatr-08 FAILED:", result_08["reason"])
-        sys.exit(2)
+        if exc["status"] == "PASS_WITH_EXCEPTION":
+            print(f"⚠ Exception Found in Jira: {exc['exception_id']} (valid until {exc['expiry_date']})")
+        else:
+            sys.exit(2)
 
-    # -------------------------
-    # Gate gatr-09
-    # -------------------------
-    result_09 = evaluate_gatr_09()
+    # gatr-09
+    r09 = evaluate_gatr_09()
+    if r09["status"] == "FAIL":
+        print("❌ gatr-09 FAILED:", r09["reason"], r09["params"])
 
-    if result_09["status"] == "FAIL":
-        print("\n❌ gatr-09 FAILED:", result_09["reason"])
-        print("Disallowed:", result_09["disallowed"])
-        sys.exit(2)
+        exc = jira_check_exception(args.jira_url, args.jira_user, args.jira_token,
+                                   gate_id="gatr-09", app_id=args.app_id)
 
-    # -------------------------
-    # Gate gatr-14
-    # -------------------------
-    result_14 = evaluate_gatr_14(args.branch, args.environment)
+        if exc["status"] == "PASS_WITH_EXCEPTION":
+            print(f"⚠ Exception Found in Jira: {exc['exception_id']}")
+        else:
+            sys.exit(2)
 
-    if result_14["status"] == "FAIL":
-        print("\n❌ gatr-14 FAILED:", result_14["reason"])
-        print("Branch:", result_14["branch"])
-        print("Env:", result_14["env"])
-        sys.exit(2)
+    # gatr-14
+    r14 = evaluate_gatr_14(args.branch, args.environment)
+    if r14["status"] == "FAIL":
+        print("❌ gatr-14 FAILED:", r14["reason"])
 
-    print("\n✅ All governance + quality gates PASSED")
+        exc = jira_check_exception(args.jira_url, args.jira_user, args.jira_token,
+                                   gate_id="gatr-14", app_id=args.app_id)
+
+        if exc["status"] == "PASS_WITH_EXCEPTION":
+            print(f"⚠ Exception Found in Jira: {exc['exception_id']}")
+        else:
+            sys.exit(2)
+
+    print("✅ All gates PASSED")
     sys.exit(0)
 
 
