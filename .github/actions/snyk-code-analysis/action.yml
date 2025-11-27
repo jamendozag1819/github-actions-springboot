@@ -14,6 +14,9 @@ inputs:
   snyk-project-name:
     description: "snyk project name"
     required: true
+  image-sha:
+    description: "image-sha"
+    required: true
 
 runs:
   using: "composite"
