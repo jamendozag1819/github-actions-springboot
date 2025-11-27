@@ -77,7 +77,7 @@ jobs:
           SONAR_PROJECT: ${{ inputs.project-key || secrets.SONAR_PROJECT_KEY }}
         run: |
           echo "Running gating for $SONAR_PROJECT..."
-          python3 scripts/sonar_gating.py \
+          python3 ./scripts/sonar_gating.py \
             --sonar-host "https://sonarcloud.io" \
             --token "${SONAR_TOKEN}" \
             --project-key "${SONAR_PROJECT}" \
