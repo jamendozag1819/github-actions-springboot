@@ -13,9 +13,6 @@ public class ApiSpringbootApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(ApiSpringbootApplication.class, args);
-		
-		String password = "12345";
-		System.out.println(password);
 	}
 	
 }
