@@ -59,7 +59,7 @@ runs:
 
         echo "Running scan for image: $IMAGE_TAG"
 
-        $SNYK_CMD "$IMAGE_TAG" --file=Dockerfile \
+        snyk container test "$IMAGE_TAG" --file=Dockerfile \
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true
