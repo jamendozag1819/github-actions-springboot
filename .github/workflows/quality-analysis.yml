@@ -35,6 +35,12 @@ jobs:
           distribution: 'temurin'
           java-version: ${{ inputs.java-version }}
 
+      # ----------------------------------
+      # Build project to generate Java .class files
+      # ----------------------------------
+      - name: Build with Maven
+        run: mvn -B clean verify
+
       - name: Install Sonar Scanner
         run: |
           curl -sSLo sonar.zip \
@@ -44,7 +50,7 @@ jobs:
           echo "$HOME/sonar-scanner/bin" >> $GITHUB_PATH
 
       # ----------------------------------
-      # Run Sonar Analysis
+      # Run Sonar Analysis (FIXED)
       # ----------------------------------
       - name: Run Sonar Scanner
         env:
@@ -58,8 +64,9 @@ jobs:
             -Dsonar.organization="${SONAR_ORG}" \
             -Dsonar.projectKey="${SONAR_PROJECT}" \
             -Dsonar.sources=./ \
+            -Dsonar.java.binaries=target/classes \
             -Dsonar.host.url="https://sonarcloud.io" \
-            -Dsonar.login="${SONAR_TOKEN}"
+            -Dsonar.token="${SONAR_TOKEN}"
 
       # ----------------------------------
       # Sonar Gating Script
