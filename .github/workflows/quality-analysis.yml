@@ -41,6 +41,15 @@ jobs:
       - name: Build with Maven
         run: mvn -B clean verify
 
+      - name: Debug coverage paths
+        run: |
+         echo "=== surefire-reports ==="
+         ls -R target/surefire-reports || echo "NO SUREFIRE REPORTS"
+
+         echo "=== jacoco report ==="
+         ls -R target/site/jacoco || echo "NO JACOCO REPORT"
+         cat target/site/jacoco/jacoco.xml || echo "JACOCO XML EMPTY"
+
       - name: Install Sonar Scanner
         run: |
           curl -sSLo sonar.zip \
@@ -61,12 +70,17 @@ jobs:
           echo "Project key to scan: $SONAR_PROJECT"
 
           sonar-scanner \
-            -Dsonar.organization="${SONAR_ORG}" \
-            -Dsonar.projectKey="${SONAR_PROJECT}" \
-            -Dsonar.sources=./ \
-            -Dsonar.java.binaries=target/classes \
-            -Dsonar.host.url="https://sonarcloud.io" \
-            -Dsonar.token="${SONAR_TOKEN}"
+           -Dsonar.organization="${SONAR_ORG}" \
+           -Dsonar.projectKey="${SONAR_PROJECT}" \
+           -Dsonar.sources=src/main/java \
+           -Dsonar.tests=src/test/java \
+           -Dsonar.java.binaries=target/classes \
+           -Dsonar.java.test.binaries=target/test-classes \
+           -Dsonar.junit.reportPaths=target/surefire-reports \
+           -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+           -Dsonar.host.url="https://sonarcloud.io" \
+           -Dsonar.token="${SONAR_TOKEN}"
+
 
       # ----------------------------------
       # Sonar Gating Script
