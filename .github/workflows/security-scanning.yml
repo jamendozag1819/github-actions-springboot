@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: "17"
+      image-sha:
+        description: "image sha"
+        required: true
+        type: string
+        default: ""
     secrets:
       SNYK_TOKEN:
         required: true
@@ -67,6 +72,7 @@ jobs:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
           snyk-project-name: "jamendozag1819_github-actions-springboot"
+          image-sha: ${{ inputs.image-sha }}
 
       - name: Extract Snyk results for Gates
         id: extract

@@ -68,6 +68,7 @@ jobs:
     uses: ./.github/workflows/security-scanning.yml
     with:
       java-version: "17"
+      image-sha: ${{ github.sha }}
     secrets:
       APP_ID: "APP123"
       JIRA_URL: ${{ secrets.JIRA_URL }}
@@ -76,6 +77,7 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
       JIRA_PROJECT: "SCRUM"
+      
 
   # ==========================================================
   # 3. CODE QUALITY – SonarQube Cloud

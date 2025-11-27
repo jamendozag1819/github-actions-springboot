@@ -14,6 +14,10 @@ inputs:
   snyk-project-name:
     description: "snyk project name"
     required: true
+  image-sha:
+    description: "image sha"
+    required: true
+    default: ""
 
 runs:
   using: "composite"
@@ -59,7 +63,7 @@ runs:
 
         echo "Running scan for image: $IMAGE_TAG"
 
-        snyk container test "$IMAGE_TAG" --file=Dockerfile \
+        snyk container test myapp:${{ inputs.image-sha }} --file=Dockerfile \
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true
