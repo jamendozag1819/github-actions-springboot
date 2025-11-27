@@ -85,7 +85,7 @@ def load_thresholds(threshold_path, project_key):
         print(f"No thresholds found for '{project_key}' or 'default'.")
     return thresholds
 
-def compare_metrics(metrics, thresholds, quality_status, sonar_url, project_key, branch=None,args): #branch=None
+def compare_metrics(metrics, thresholds, quality_status, sonar_url, project_key, args, branch=None): #branch=None
     """Compare metrics and quality gate status against thresholds."""
     def to_float(v):
         try:
@@ -232,7 +232,7 @@ def main():
         "sqale_rating": convert_rating(extract_metric(metrics_data, "sqale_rating")),
     }
 
-    exit_code = compare_metrics(metrics, thresholds, status, sonar_url, project, branch,args)
+    exit_code = compare_metrics(metrics, thresholds, status, sonar_url, project,args, branch)
     sys.exit(exit_code)
 
 if __name__ == "__main__":
