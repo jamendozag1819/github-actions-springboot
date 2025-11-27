@@ -185,8 +185,8 @@ def main():
     branch = args.branch
 
     print(f"\nAnalyzing SonarQube Quality Gate for '{project}'")
-    #print(f"Sonar URL: {sonar_url}")
-    #print(f"Threshold file: {threshold_path}")
+    print(f"Sonar URL: {sonar_url}")
+    print(f"Threshold file: {threshold_path}")
 
     thresholds = load_thresholds(threshold_path, project)
     if not thresholds:
