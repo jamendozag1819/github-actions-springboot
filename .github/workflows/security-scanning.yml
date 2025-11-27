@@ -4,15 +4,9 @@ on:
   workflow_call:
     inputs:
       java-version:
-        description: "Java version to use"
-        required: false
         type: string
         default: "17"
-      image-sha:
-        description: "image sha"
-        required: true
-        type: string
-        default: ""
+
     secrets:
       SNYK_TOKEN:
         required: true
@@ -31,16 +25,12 @@ on:
 
     outputs:
       critical-count:
-        description: "Critical vulnerabilities count"
         value: ${{ jobs.snyk.outputs.critical }}
       high-count:
-        description: "High vulnerabilities count"
         value: ${{ jobs.snyk.outputs.high }}
       medium-count:
-        description: "Medium vulnerabilities count"
         value: ${{ jobs.snyk.outputs.medium }}
       low-count:
-        description: "Low vulnerabilities count"
         value: ${{ jobs.snyk.outputs.low }}
 
 jobs:
@@ -59,26 +49,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java
-        if: inputs.java-version != ''
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ inputs.java-version }}
 
-      - name: Run Snyk Scan (Composite Action)
+      - name: Run Snyk Scan
         uses: ./.github/actions/snyk-code-analysis
         with:
           app-path: "."
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
           snyk-project-name: "jamendozag1819_github-actions-springboot"
-          image-sha: ${{ inputs.image-sha }}
+          image-sha: ${{ github.sha }}
 
-      - name: Extract Snyk results for Gates
+      - name: Extract Snyk results
         id: extract
         run: |
-          echo "Extracting vulnerabilities from snyk-report.json"
-          
           CRIT=$(jq '[ .vulnerabilities[] | select(.severity == "critical") ] | length' snyk-report.json)
           HIGH=$(jq '[ .vulnerabilities[] | select(.severity == "high") ] | length' snyk-report.json)
           MED=$(jq '[ .vulnerabilities[] | select(.severity == "medium") ] | length' snyk-report.json)
@@ -88,15 +75,3 @@ jobs:
           echo "high=$HIGH" >> $GITHUB_OUTPUT
           echo "medium=$MED" >> $GITHUB_OUTPUT
           echo "low=$LOW" >> $GITHUB_OUTPUT
-
-      - name: Print Snyk Summary
-        run: |
-          echo "===================================="
-          echo "          Snyk Summary"
-          echo "===================================="
-          echo "Critical : ${{ steps.extract.outputs.critical }}"
-          echo "High     : ${{ steps.extract.outputs.high }}"
-          echo "Medium   : ${{ steps.extract.outputs.medium }}"
-          echo "Low      : ${{ steps.extract.outputs.low }}"
-          echo "===================================="
-

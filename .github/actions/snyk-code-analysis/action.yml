@@ -1,5 +1,5 @@
 name: "Snyk Scan"
-description: "Runs Snyk security scan and reports critical vulnerabilities"
+description: "Runs Snyk security scan and reports vulnerabilities"
 
 inputs:
   app-path:
@@ -14,10 +14,6 @@ inputs:
   snyk-project-name:
     description: "snyk project name"
     required: true
-  image-sha:
-    description: "image sha"
-    required: true
-    default: ""
 
 runs:
   using: "composite"
@@ -31,48 +27,27 @@ runs:
       shell: bash
       run: |
         echo "Snyk Scan Configuration:"
-        echo "App Path: ${{ inputs.app-path }}"
-        echo "Snyk Organization: ${{ inputs.snyk-org }}"
-        echo "Snyk Project Name: ${{ inputs.snyk-project-name }}"
+        echo "Project: ${{ inputs.snyk-project-name }}"
+        echo "Image: myapp:${{ inputs.image-sha }}"
 
-    - name: Detect Tech Stack via Python
-      shell: bash
-      run: |
-        cd ${{ inputs.app-path }}
-        python3 scripts/detect_tech.py
-        echo "Detected stack: $SNYK_STACK"
-
-    - name: Resolve Snyk Command (Python)
-      shell: bash
-      run: |
-        cd ${{ inputs.app-path }}
-        python3 ./scripts/resolve_snyk_command.py
-        echo "Resolved SNYK_CMD: $SNYK_CMD"
-
-    # ------------------------------------------------------------------
-    #  Snyk Scan (Docker / Code / SCA)
-    # ------------------------------------------------------------------
-    - name: Run Snyk Scan
+    - name: Run Snyk Scan (Container)
       shell: bash
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ inputs.snyk-token }}
-        IMAGE_TAG: ${{ env.IMAGE_TAG }}
       run: |
         cd ${{ inputs.app-path }}
 
-        echo "Running scan for image: $IMAGE_TAG"
+        echo "Running container scan on myapp:${{ inputs.image-sha }}"
 
-        snyk container test myapp:${{ inputs.image-sha }} --file=Dockerfile \
+        snyk container test myapp:${{ inputs.image-sha }} \
+          --file=Dockerfile \
           --org="${{ inputs.snyk-org }}" \
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true
 
         ls -lh snyk-report.json || echo "❌ snyk-report.json NOT GENERATED"
 
-    # ------------------------------------------------------------------
-    #  Snyk Gating Phase
-    # ------------------------------------------------------------------
     - name: Snyk Gating
       shell: bash
       env:
@@ -80,8 +55,6 @@ runs:
         SNYK_ORG: ${{ inputs.snyk-org }}
         SNYK_PROJECT: ${{ inputs.snyk-project-name }}
       run: |
-        echo "Running Snyk gating check for project ${SNYK_PROJECT}..."
-
         python3 ./.github/actions/snyk-code-analysis/snyk_gating.py \
           --api-url "https://api.snyk.io" \
           --org-id "${SNYK_ORG}" \
