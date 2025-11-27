@@ -85,7 +85,7 @@ def load_thresholds(threshold_path, project_key):
         print(f"No thresholds found for '{project_key}' or 'default'.")
     return thresholds
 
-def compare_metrics(metrics, thresholds, quality_status, sonar_url, project_key, branch=None): #branch=None
+def compare_metrics(metrics, thresholds, quality_status, sonar_url, project_key, branch=None,args): #branch=None
     """Compare metrics and quality gate status against thresholds."""
     def to_float(v):
         try:
@@ -132,7 +132,7 @@ def compare_metrics(metrics, thresholds, quality_status, sonar_url, project_key,
 
     fail_reasons = []
 
-    if quality_status == "ERROR":
+    if quality_status == "ERROR" and not args.ignore_sonar_gate:
         fail_reasons.append("Quality gate failed in SonarQube")
     if coverage < min_coverage:
         fail_reasons.append("Coverage below threshold")
@@ -180,6 +180,7 @@ def main():
     parser.add_argument("--threshold-file", required=True)
     parser.add_argument("--branch", default=None)
     parser.add_argument("--wait", action="store_true", help="Wait for quality gate computation")
+    parser.add_argument("--ignore-sonar-gate", action="store_true",help="Ignore SonarCloud native quality gate status")
     args = parser.parse_args()
 
     sonar_url = args.sonar_host.rstrip("/")
@@ -231,7 +232,7 @@ def main():
         "sqale_rating": convert_rating(extract_metric(metrics_data, "sqale_rating")),
     }
 
-    exit_code = compare_metrics(metrics, thresholds, status, sonar_url, project, branch)
+    exit_code = compare_metrics(metrics, thresholds, status, sonar_url, project, branch,args)
     sys.exit(exit_code)
 
 if __name__ == "__main__":

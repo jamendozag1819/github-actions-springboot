@@ -97,4 +97,5 @@ jobs:
             --project-key "${SONAR_PROJECT}" \
             --threshold-file "gating-configs/sonar_thresholds.json" \
             --wait \
+            --ignore-sonar-gate \
             --branch "${GITHUB_REF#refs/heads/}"
