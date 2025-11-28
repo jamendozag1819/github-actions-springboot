@@ -160,7 +160,6 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
 
     print("🔎 Ejecutando búsqueda JQL:")
-    print(jql)
 
     api_url = f"{jira_url}/rest/api/3/search/jql"
 
