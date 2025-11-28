@@ -175,7 +175,7 @@ def main():
     parser.add_argument("--jira-user")
     parser.add_argument("--jira-token")
     parser.add_argument("--app-id")
-    parser.add_argument("--wait", action="store_true")   # <-- ADDED
+    parser.add_argument("--wait", action="store_true")
 
     args = parser.parse_args()
 
