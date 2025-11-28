@@ -206,11 +206,13 @@ def main():
     if r09["status"] == "FAIL":
         print("❌ gatr-09 FAILED:", r09["reason"])
         print("Disallowed:", r09["disallowed"])
+        evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_09",args.app_id)
         sys.exit(2)
 
     r14 = evaluate_gatr_14(args.branch, args.environment)
     if r14["status"] == "FAIL":
         print("❌ gatr-14 FAILED:", r14["reason"])
+        evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_14",args.app_id)
         sys.exit(2)
 
     print("✅ All gates PASSED")
