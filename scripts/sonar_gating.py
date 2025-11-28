@@ -41,6 +41,7 @@ def fetch_json(url, user=None, token=None, is_jira=False, body=None):
         else:
             req = urllib.request.Request(url)
 
+        
         # Autorización
         if is_jira:
             # Basic Auth: user:token
