@@ -167,7 +167,8 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         "jql": "key = GATR-6",
         "fields": "[*]"
     }
-
+    print(f"URL : ",api_url)
+    print(f"Body : ",Body)    
     result = fetch_json_sonar(
         api_url,
         user=jira_user,
