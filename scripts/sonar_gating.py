@@ -31,7 +31,7 @@ def fetch_json(url, user=None, token=None, is_jira=False):
     except Exception as e:
         return {"error": str(e)}
 
-def fetch_json_sonar(url, user=None, token=None, is_jira=False, jql=None):
+def fetch_json_sonar(url, user=None, token=None, is_jira=False, jql=None ,body= None):
     try:
         # Si es una búsqueda JQL, Jira obliga a usar POST
         if is_jira and "/search/jql" in url:
