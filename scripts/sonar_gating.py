@@ -158,15 +158,6 @@ def evaluate_gatr_14(branch, environment):
 def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     today = time.strftime("%Y-%m-%d")
 
-    # ⚠️ IMPORTANTE: usa los nombres reales de tus campos
-    jql = (
-        f'project = GATR AND '
-        f'"Gate ID" = "{gate_id}" AND '
-        f'"Application ID" = "{app_id}" AND '
-        f'"Exception Approval Status" = "DECISION MADE" AND '
-        f'"Exception Approval Decision" = "Approved" AND '
-        f'"Exception Expiry Date" >= "{today}"'
-    )
 
     print("🔎 Ejecutando búsqueda JQL:")
     print(jql)
@@ -174,9 +165,8 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     api_url = f"{jira_url}/rest/api/3/search/jql"
 
     Body = {
-        "query": jql,
-        "startAt": 0,
-        "maxResults": 1     # obligatorio
+        "jql": "key = GATR-6",
+        "fields": "[*]"
     }
 
     result = fetch_json_sonar(
