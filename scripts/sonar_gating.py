@@ -31,6 +31,30 @@ def fetch_json(url, user=None, token=None, is_jira=False):
     except Exception as e:
         return {"error": str(e)}
 
+def fetch_json_sonar(url, user=None, token=None, is_jira=False, jql=None):
+    try:
+        # Si es una búsqueda JQL, Jira obliga a usar POST
+        if is_jira and "/search/jql" in url:
+            body = json.dumps({"query": jql}).encode("utf-8")
+            req = urllib.request.Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+        else:
+            req = urllib.request.Request(url)
+
+        # Auth
+        if is_jira:
+            auth = base64.b64encode(f"{user}:{token}".encode()).decode()
+        else:
+            auth = base64.b64encode(f"{token}:".encode()).decode()
+
+        req.add_header("Authorization", f"Basic {auth}")
+
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return json.load(response)
+
+    except Exception as e:
+        return {"error": str(e)}
+
 # ------------------------------------------------------------
 # Sonar API
 # ------------------------------------------------------------
@@ -151,7 +175,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     print(jql)
 
     # --- Ejecutar POST hacia Jira ---
-    result = fetch_json(
+    result = fetch_json_sonar(
         api_url,
         user=jira_user,
         token=jira_token,
