@@ -40,11 +40,6 @@ runs:
         apt-get install -y openjdk-17-jre python3  > /dev/null
         npm install -g sonar-scanner --silent > /dev/null
 
-    # - name: Fetch sonar configs
-    #   uses: actions/checkout@v4
-    #   with:
-    #     repository: poc-pipeline/poc-ci-pipeline-template/sonar-prop-config
-    #     path: sonar-config
     
     - name: Sonar Env Info
       shell: bash
