@@ -143,8 +143,8 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         f'cf_exception_expiry_date >= "{today}"'
     )
 
-    api_url = f"{jira_url}/rest/api/3/search?jql={urllib.parse.quote(jql)}"
-
+    #api_url = f"{jira_url}/rest/api/3/search?jql={urllib.parse.quote(jql)}"
+    api_url = f"{jira_url}/rest/api/3/search/jql?query={urllib.parse.quote(jql)}"
     result = fetch_json(api_url, user=jira_user, token=jira_token, is_jira=True)
     print(f"Resultado jira : ",result)
     if "error" in result:
@@ -199,21 +199,30 @@ def main():
     r08 = evaluate_gatr_08(data)
     if r08["status"] == "FAIL":
         print("❌ gatr-08 FAILED:", r08["reason"])
-        evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_08",args.app_id)
-        sys.exit(2)
+        jira = evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_08",args.app_id)
+        if jira["status"] == "PASS_WITH_EXCEPTION":
+            print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
+        else:
+            sys.exit(2)
 
     r09 = evaluate_gatr_09()
     if r09["status"] == "FAIL":
         print("❌ gatr-09 FAILED:", r09["reason"])
         print("Disallowed:", r09["disallowed"])
-        evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_09",args.app_id)
-        sys.exit(2)
+        jira = evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_09",args.app_id)
+        if jira["status"] == "PASS_WITH_EXCEPTION":
+            print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
+        else:
+            sys.exit(2)
 
     r14 = evaluate_gatr_14(args.branch, args.environment)
     if r14["status"] == "FAIL":
         print("❌ gatr-14 FAILED:", r14["reason"])
-        evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_14",args.app_id)
-        sys.exit(2)
+        jira = evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_14",args.app_id)
+        if jira["status"] == "PASS_WITH_EXCEPTION":
+            print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
+        else:
+            sys.exit(2)
 
     print("✅ All gates PASSED")
     sys.exit(0)
