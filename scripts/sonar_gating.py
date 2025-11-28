@@ -179,7 +179,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         "maxResults": 1     # obligatorio
     }
 
-    result = fetch_json(
+    result = fetch_json_sonar(
         api_url,
         user=jira_user,
         token=jira_token,
