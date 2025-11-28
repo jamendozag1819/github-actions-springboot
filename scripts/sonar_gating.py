@@ -14,22 +14,6 @@ import re
 # ------------------------------------------------------------
 # HTTP Requests
 # ------------------------------------------------------------
-#def fetch_json(url, user=None, token=None, is_jira=False):
-#    try:
-#        req = urllib.request.Request(url)
-#
-#        if is_jira:
-#            auth = base64.b64encode(f"{user}:{token}".encode()).decode()
-#        else:
-#            auth = base64.b64encode(f"{token}:".encode()).decode()
-#
-#        req.add_header("Authorization", f"Basic {auth}")
-#
-#        with urllib.request.urlopen(req, timeout=30) as response:
-#            return json.load(response)
-#
-#    except Exception as e:
-#        return {"error": str(e)}
 
 def fetch_json(url, user=None, token=None, is_jira=False, body=None):
     try:
