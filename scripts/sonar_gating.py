@@ -31,30 +31,35 @@ import re
 #    except Exception as e:
 #        return {"error": str(e)}
 
-def fetch_json(url, user=None, token=None, is_jira=False, jql=None ,body= None):
+def fetch_json(url, user=None, token=None, is_jira=False, body=None):
     try:
-        # Si es una búsqueda JQL, Jira obliga a usar POST
-        if is_jira and "/search/jql" in url:
-            body = json.dumps({"query": jql}).encode("utf-8")
-            print(f"Body : ",body)
-            req = urllib.request.Request(url, data=body, method="POST")
+        # Si es consulta Jira (POST con body)
+        if is_jira and body is not None:
+            data = json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(url, data=data, method="POST")
             req.add_header("Content-Type", "application/json")
         else:
             req = urllib.request.Request(url)
 
-        # Auth
+        # Autorización
         if is_jira:
-            auth = base64.b64encode(f"{user}:{token}".encode()).decode()
+            # Basic Auth: user:token
+            credentials = f"{user}:{token}"
+            auth = base64.b64encode(credentials.encode()).decode()
         else:
+            # Sonar
             auth = base64.b64encode(f"{token}:".encode()).decode()
-        print(f"Authorization : ",auth)
+
+        print("Authorization:", auth)
         req.add_header("Authorization", f"Basic {auth}")
 
+        # Llamada HTTP
         with urllib.request.urlopen(req, timeout=30) as response:
             return json.load(response)
 
     except Exception as e:
         return {"error": str(e)}
+
 
 # ------------------------------------------------------------
 # Sonar API
