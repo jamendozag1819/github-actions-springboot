@@ -146,7 +146,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     api_url = f"{jira_url}/rest/api/3/search?jql={urllib.parse.quote(jql)}"
 
     result = fetch_json(api_url, user=jira_user, token=jira_token, is_jira=True)
-
+    print(f"Resultado jira : ",result)
     if "error" in result:
         return {"status":"ERROR","reason":result["error"]}
 
@@ -199,6 +199,7 @@ def main():
     r08 = evaluate_gatr_08(data)
     if r08["status"] == "FAIL":
         print("❌ gatr-08 FAILED:", r08["reason"])
+        evaluate_jira_exception(args.jira_url,args.jira_user,args.jira_token,"gatr_08",args.app_id)
         sys.exit(2)
 
     r09 = evaluate_gatr_09()
