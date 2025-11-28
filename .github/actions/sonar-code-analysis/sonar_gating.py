@@ -171,12 +171,10 @@ def main():
     parser.add_argument("--threshold-file", required=True)
     parser.add_argument("--branch", required=True)
     parser.add_argument("--environment", default="DEV")
-
     parser.add_argument("--jira-url")
     parser.add_argument("--jira-user")
     parser.add_argument("--jira-token")
     parser.add_argument("--app-id")
-
     parser.add_argument("--wait", action="store_true")   # <-- ADDED
 
     args = parser.parse_args()
