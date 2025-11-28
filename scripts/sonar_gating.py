@@ -173,7 +173,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
     api_url = f"{jira_url}/rest/api/3/search/jql"
 
-    body = {
+    Body = {
         "query": jql,
         "startAt": 0,
         "maxResults": 1     # obligatorio
@@ -184,7 +184,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         user=jira_user,
         token=jira_token,
         is_jira=True,
-        body=body
+        body=Body
     )
 
     print("📥 Resultado Jira:", result)
