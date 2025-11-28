@@ -109,5 +109,6 @@ jobs:
            --jira-url "${{ secrets.JIRA_URL }}" \
            --jira-user "${{ secrets.JIRA_USER }}" \
            --jira-token "${{ secrets.JIRA_API_TOKEN }}" \
-           --app-id "${{ secrets.JIRA_APP_ID }}"
+           --app-id "${{ secrets.JIRA_APP_ID }}" \
+           --wait
 
