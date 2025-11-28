@@ -169,7 +169,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     }
     print(f"URL : ",api_url)
     print(f"Body : ",Body)    
-    result = fetch_json_sonar(
+    result = fetch_json(
         api_url,
         user=jira_user,
         token=jira_token,
