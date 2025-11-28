@@ -134,6 +134,7 @@ def evaluate_gatr_14(branch, environment):
 def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     today = time.strftime("%Y-%m-%d")
 
+    # --- Construcción del JQL ---
     jql = (
         f'project = GATR AND '
         f'cf_gate_id = "{gate_id}" AND '
@@ -143,22 +144,40 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         f'cf_exception_expiry_date >= "{today}"'
     )
 
-    #api_url = f"{jira_url}/rest/api/3/search?jql={urllib.parse.quote(jql)}"
-    api_url = f"{jira_url}/rest/api/3/search/jql?query={urllib.parse.quote(jql)}"
-    result = fetch_json(api_url, user=jira_user, token=jira_token, is_jira=True)
-    print(f"Resultado jira : ",result)
-    if "error" in result:
-        return {"status":"ERROR","reason":result["error"]}
+    # --- Nueva API obligatoria ---
+    api_url = f"{jira_url}/rest/api/3/search/jql"
 
-    if result.get("total", 0) > 0:
+    print("🔎 Ejecutando búsqueda JQL:")
+    print(jql)
+
+    # --- Ejecutar POST hacia Jira ---
+    result = fetch_json(
+        api_url,
+        user=jira_user,
+        token=jira_token,
+        is_jira=True,
+        jql=jql
+    )
+
+    print("📥 Resultado Jira:", result)
+
+    # --- Manejo de erroes ---
+    if "error" in result:
+        return {"status": "ERROR", "reason": result["error"]}
+
+    total = result.get("total", 0)
+    if total > 0:
         issue = result["issues"][0]
         return {
-            "status":"PASS_WITH_EXCEPTION",
+            "status": "PASS_WITH_EXCEPTION",
             "exception_id": issue["key"],
             "expires": issue["fields"].get("cf_exception_expiry_date")
         }
 
-    return {"status":"FAIL", "reason":"No valid exception found"}
+    return {
+        "status": "FAIL",
+        "reason": "No valid exception found"
+    }
 
 # ------------------------------------------------------------
 # MAIN
