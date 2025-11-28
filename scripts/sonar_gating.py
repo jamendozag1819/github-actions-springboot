@@ -47,7 +47,7 @@ def fetch_json(url, user=None, token=None, is_jira=False, jql=None ,body= None):
             auth = base64.b64encode(f"{user}:{token}".encode()).decode()
         else:
             auth = base64.b64encode(f"{token}:".encode()).decode()
-		print(f"Authorization : ",auth)
+        print(f"Authorization : ",auth)
         req.add_header("Authorization", f"Basic {auth}")
 
         with urllib.request.urlopen(req, timeout=30) as response:
