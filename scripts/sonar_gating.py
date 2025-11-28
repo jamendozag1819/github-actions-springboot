@@ -36,6 +36,7 @@ def fetch_json(url, user=None, token=None, is_jira=False, jql=None ,body= None):
         # Si es una búsqueda JQL, Jira obliga a usar POST
         if is_jira and "/search/jql" in url:
             body = json.dumps({"query": jql}).encode("utf-8")
+            print(f"Body : ",body)
             req = urllib.request.Request(url, data=body, method="POST")
             req.add_header("Content-Type", "application/json")
         else:
@@ -46,7 +47,7 @@ def fetch_json(url, user=None, token=None, is_jira=False, jql=None ,body= None):
             auth = base64.b64encode(f"{user}:{token}".encode()).decode()
         else:
             auth = base64.b64encode(f"{token}:".encode()).decode()
-
+		print(f"Authorization : ",auth)
         req.add_header("Authorization", f"Basic {auth}")
 
         with urllib.request.urlopen(req, timeout=30) as response:
