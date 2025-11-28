@@ -104,7 +104,6 @@ jobs:
            --token "${SONAR_TOKEN}" \
            --project-key "${SONAR_PROJECT}" \
            --threshold-file "gating-configs/sonar_thresholds.json" \
-           --wait \
            --branch "${GITHUB_REF#refs/heads/}" \
            --environment "DEV" \
            --jira-url "${{ secrets.JIRA_URL }}" \
