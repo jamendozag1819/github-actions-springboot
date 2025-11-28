@@ -158,50 +158,53 @@ def evaluate_gatr_14(branch, environment):
 def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     today = time.strftime("%Y-%m-%d")
 
-    # --- Construcción del JQL ---
+    # ⚠️ IMPORTANTE: usa los nombres reales de tus campos
     jql = (
         f'project = GATR AND '
-        f'cf_gate_id = "{gate_id}" AND '
-        f'cf_application_id = "{app_id}" AND '
-        f'cf_exception_approval_status = "DECISION MADE" AND '
-        f'cf_exception_approval_decision = "Approved" AND '
-        f'cf_exception_expiry_date >= "{today}"'
+        f'"Gate ID" = "{gate_id}" AND '
+        f'"Application ID" = "{app_id}" AND '
+        f'"Exception Approval Status" = "DECISION MADE" AND '
+        f'"Exception Approval Decision" = "Approved" AND '
+        f'"Exception Expiry Date" >= "{today}"'
     )
-
-    # --- Nueva API obligatoria ---
-    api_url = f"{jira_url}/rest/api/3/search/jql"
 
     print("🔎 Ejecutando búsqueda JQL:")
     print(jql)
 
-    # --- Ejecutar POST hacia Jira ---
-    result = fetch_json_sonar(
+    api_url = f"{jira_url}/rest/api/3/search/jql"
+
+    body = {
+        "query": jql,
+        "startAt": 0,
+        "maxResults": 1     # obligatorio
+    }
+
+    result = fetch_json(
         api_url,
         user=jira_user,
         token=jira_token,
         is_jira=True,
-        jql=jql
+        body=body
     )
 
     print("📥 Resultado Jira:", result)
 
-    # --- Manejo de erroes ---
+    # ⚠️ Error genérico
     if "error" in result:
         return {"status": "ERROR", "reason": result["error"]}
 
-    total = result.get("total", 0)
-    if total > 0:
+    # Si hay alguna excepción aprobada
+    if result.get("total", 0) > 0:
         issue = result["issues"][0]
         return {
             "status": "PASS_WITH_EXCEPTION",
             "exception_id": issue["key"],
-            "expires": issue["fields"].get("cf_exception_expiry_date")
+            "expires": issue["fields"].get("Exception Expiry Date")
         }
 
-    return {
-        "status": "FAIL",
-        "reason": "No valid exception found"
-    }
+    # Sin excepciones válidas
+    return {"status": "FAIL", "reason": "No valid exception found"}
+
 
 # ------------------------------------------------------------
 # MAIN
