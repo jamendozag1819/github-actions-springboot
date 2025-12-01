@@ -155,8 +155,8 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     api_url = f"{jira_url}/rest/api/3/search/jql"
 
     Body = {
-        "jql": "key = GATR-6",
-        "fields": "[*]"
+        f"jql": "key = {gate_id}",
+        "fields": "["summary","status"]"
     }
     print(f"URL : ",api_url)
     print(f"Body : ",Body)    
