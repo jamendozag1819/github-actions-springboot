@@ -155,14 +155,65 @@ def evaluate_gatr_14(branch, environment):
     return {"gate": "gatr-14", "status": "PASS"}
 
 
-# ------------------------------------------------------------
-# Jira Gate — Approved Exceptions
-# ------------------------------------------------------------
+from datetime import datetime
+
+def _extract_custom_value(fields, cf_id):
+    """
+    Extrae de forma segura el valor "significativo" de un customfield.
+    Soporta:
+    - None
+    - string (ej. "GATR-9")
+    - dict con 'value' (ej. {"value":"Opción 1", "id":"10028"})
+    - dict con 'child' que contiene 'value' (cascade select)
+    - lista (devuelve el primer elemento si es relevante)
+    """
+    if fields is None:
+        return None
+    val = fields.get(cf_id)
+    if val is None:
+        return None
+
+    # Si es string/number -> devolver directo
+    if isinstance(val, (str, int, float)):
+        return val
+
+    # Si es lista, intentar obtener valor del primer elemento
+    if isinstance(val, list) and len(val) > 0:
+        first = val[0]
+        # si es dict con keys conocidas
+        if isinstance(first, (str, int, float)):
+            return first
+        val = first
+
+    # Si es dict y tiene 'value'
+    if isinstance(val, dict):
+        # Caso: cascading select -> tiene 'child' con 'value'
+        if "child" in val and isinstance(val["child"], dict) and "value" in val["child"]:
+            return val["child"].get("value") or val["child"].get("id")
+        # Caso: opcion simple -> tiene 'value'
+        if "value" in val:
+            return val.get("value") or val.get("id")
+        # Caso: a veces vienen como { "id": "10029", "value": "Approved" } -> ya manejado
+        # Fallback a campo 'id'
+        if "id" in val:
+            return val.get("id")
+    return None
+
 
 def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
-    print(f"🔎 Consultando excepción Jira con GET /issue/{gate_id}")
+    """
+    Consulta GET /issue/{gate_id} y valida:
+      project = GATES
+      cf_gate_id = gate_id
+      cf_application_id = app_id
+      cf_exception_approval_status = "DECISION MADE"
+      cf_exception_approval_decision = "Approved"
+      cf_exception_expiry_date >= today
+    Si todas pasan -> devuelve PASS_WITH_EXCEPTION con exception_id y expires
+    Si falla cualquiera -> devuelve FAIL
+    """
 
-    # Nuevo endpoint GET por issue
+    print(f"🔎 Consultando excepción Jira con GET /issue/{gate_id}")
     api_url = f"{jira_url}/rest/api/3/issue/{gate_id}"
 
     result = fetch_json(
@@ -175,33 +226,97 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
     print("📥 Resultado Jira:", result)
 
-    # Si hubo error en la llamada
+    # Errores en la llamada
     if "error" in result:
         return {"status": "ERROR", "reason": result["error"]}
-
-    # Si Jira regresó un error nativo
     if result.get("errorMessages") or result.get("errors"):
-        return {
-            "status": "ERROR",
-            "reason": result.get("errorMessages", result.get("errors"))
-        }
+        return {"status": "ERROR", "reason": result.get("errorMessages", result.get("errors"))}
 
     fields = result.get("fields", {})
 
-    # Aquí puedes cambiar el nombre del campo según tu Jira
-    expiry = fields.get("customfield_10020")  # ← ejemplo
+    # ------------- Extraer valores necesarios -------------
+    # Proyecto (key)
+    project = fields.get("project", {})
+    project_key = project.get("key") if isinstance(project, dict) else project
 
-    if expiry:
-        return {
-            "status": "PASS_WITH_EXCEPTION",
-            "exception_id": result.get("key"),
-            "expires": expiry
-        }
+    # Ajusta estos ids si en tu instancia son diferentes.
+    # Según tu JSON de ejemplo:
+    #  - cf_gate_id  -> customfield_10109 (?)  (en tu ejemplo customfield_10109 contiene "GATR-9")
+    #  - cf_application_id -> customfield_10109  (si tienes otro mapping, cámbialo aquí)
+    #  - cf_exception_approval_status -> customfield_10106 (child.value => "DECISION MADE")
+    #  - cf_exception_approval_decision -> customfield_10110 (child.value => "Approved")
+    #  - cf_exception_expiry_date -> customfield_10105 (ej. "2025-12-31")
+    #
+    # Si tus customfield ids son otros, reemplaza las strings "customfield_XXXXX" abajo.
 
+    CF_GATE_ID = "customfield_10109"
+    CF_APPLICATION_ID = "customfield_10109"
+    CF_EXCEPTION_APPROVAL_STATUS = "customfield_10106"
+    CF_EXCEPTION_APPROVAL_DECISION = "customfield_10110"
+    CF_EXCEPTION_EXPIRY_DATE = "customfield_10105"
+
+    # Extraer cada valor (normalizado)
+    cf_gate_id_val = _extract_custom_value(fields, CF_GATE_ID)
+    cf_application_id_val = _extract_custom_value(fields, CF_APPLICATION_ID)
+    cf_exception_approval_status_val = _extract_custom_value(fields, CF_EXCEPTION_APPROVAL_STATUS)
+    cf_exception_approval_decision_val = _extract_custom_value(fields, CF_EXCEPTION_APPROVAL_DECISION)
+    cf_exception_expiry_date_val = _extract_custom_value(fields, CF_EXCEPTION_EXPIRY_DATE)
+
+    print("🔍 Valores extraídos:")
+    print(" project_key =", project_key)
+    print(f" {CF_GATE_ID} =", cf_gate_id_val)
+    print(f" {CF_APPLICATION_ID} =", cf_application_id_val)
+    print(f" {CF_EXCEPTION_APPROVAL_STATUS} =", cf_exception_approval_status_val)
+    print(f" {CF_EXCEPTION_APPROVAL_DECISION} =", cf_exception_approval_decision_val)
+    print(f" {CF_EXCEPTION_EXPIRY_DATE} =", cf_exception_expiry_date_val)
+
+    # ------------- Validaciones -------------
+    # 1) project == "GATES"
+    expected_project = "GATES"
+    if (not project_key) or (str(project_key).upper() != expected_project.upper()):
+        return {"status": "FAIL", "reason": f"Project mismatch: expected '{expected_project}', got '{project_key}'"}
+
+    # 2) cf_gate_id == gate_id  (acepta igualdad exacta o contener)
+    if not cf_gate_id_val or str(cf_gate_id_val).strip() != str(gate_id).strip():
+        return {"status": "FAIL", "reason": f"cf_gate_id mismatch: expected '{gate_id}', got '{cf_gate_id_val}'"}
+
+    # 3) cf_application_id == app_id
+    if not cf_application_id_val or str(cf_application_id_val).strip() != str(app_id).strip():
+        return {"status": "FAIL", "reason": f"cf_application_id mismatch: expected '{app_id}', got '{cf_application_id_val}'"}
+
+    # 4) cf_exception_approval_status == "DECISION MADE"
+    if not cf_exception_approval_status_val or str(cf_exception_approval_status_val).upper() != "DECISION MADE":
+        return {"status": "FAIL", "reason": f"cf_exception_approval_status is not 'DECISION MADE' (got '{cf_exception_approval_status_val}')"}
+
+    # 5) cf_exception_approval_decision == "Approved"
+    if not cf_exception_approval_decision_val or str(cf_exception_approval_decision_val).strip().lower() != "approved".lower():
+        return {"status": "FAIL", "reason": f"cf_exception_approval_decision is not 'Approved' (got '{cf_exception_approval_decision_val}')"}
+
+    # 6) cf_exception_expiry_date >= today
+    if not cf_exception_expiry_date_val:
+        return {"status": "FAIL", "reason": "cf_exception_expiry_date is missing"}
+
+    # Normalizar fecha: Jira puede devolver 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS...'
+    expiry_str = str(cf_exception_expiry_date_val)
+    try:
+        # Tomar los primeros 10 chars si tiene timestamp
+        expiry_date = datetime.strptime(expiry_str[:10], "%Y-%m-%d").date()
+    except Exception as e:
+        return {"status": "FAIL", "reason": f"cf_exception_expiry_date has invalid format: '{expiry_str}' ({e})"}
+
+    today = datetime.utcnow().date()
+    # Si quieres comparar en zona local, usa datetime.now().date()
+
+    if expiry_date < today:
+        return {"status": "FAIL", "reason": f"Exception expired on {expiry_date.isoformat()}"}
+
+    # ------------- Si llegamos aquí, todas las validaciones pasaron -------------
     return {
-        "status": "FAIL",
-        "reason": f"No valid exception found for {gate_id}"
+        "status": "PASS_WITH_EXCEPTION",
+        "exception_id": result.get("key"),
+        "expires": expiry_date.isoformat()
     }
+
 
 
 # ------------------------------------------------------------
