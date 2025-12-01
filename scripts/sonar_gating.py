@@ -362,6 +362,7 @@ def main():
         jira = evaluate_jira_exception(
             args.jira_url, args.jira_user, args.jira_token, "GATR-08", args.app_id
         )
+        print(f"Response jira evaluate: {jira}")
         if jira["status"] == "PASS_WITH_EXCEPTION":
             print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
         else:
@@ -374,6 +375,7 @@ def main():
         jira = evaluate_jira_exception(
             args.jira_url, args.jira_user, args.jira_token, "GATR-09", args.app_id
         )
+        print(f"Response jira evaluate: {jira}")
         if jira["status"] == "PASS_WITH_EXCEPTION":
             print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
         else:
@@ -385,6 +387,7 @@ def main():
         jira = evaluate_jira_exception(
             args.jira_url, args.jira_user, args.jira_token, "GATR-14", args.app_id
         )
+        print(f"Response jira evaluate: {jira}")
         if jira["status"] == "PASS_WITH_EXCEPTION":
             print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
         else:
