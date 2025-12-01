@@ -249,7 +249,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     #
     # Si tus customfield ids son otros, reemplaza las strings "customfield_XXXXX" abajo.
 
-    CF_GATE_ID = "customfield_10109"
+    CF_GATE_ID = "customfield_10107"
     CF_APPLICATION_ID = "customfield_10109"
     CF_EXCEPTION_APPROVAL_STATUS = "customfield_10106"
     CF_EXCEPTION_APPROVAL_DECISION = "customfield_10110"
