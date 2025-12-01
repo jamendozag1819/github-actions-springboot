@@ -170,7 +170,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         user=jira_user,
         token=jira_token,
         is_jira=True,
-        body=None  # GET, no body
+        body=None
     )
 
     print("📥 Resultado Jira:", result)
@@ -189,7 +189,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     fields = result.get("fields", {})
 
     # Aquí puedes cambiar el nombre del campo según tu Jira
-    expiry = fields.get("customfield_10109")  # ← ejemplo
+    expiry = fields.get("customfield_10020")  # ← ejemplo
 
     if expiry:
         return {
