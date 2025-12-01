@@ -277,19 +277,19 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
         return {"status": "FAIL", "reason": f"Project mismatch: expected '{expected_project}', got '{project_key}'"}
 
     # 2) cf_gate_id == gate_id  (acepta igualdad exacta o contener)
-    if not cf_gate_id_val or str(cf_gate_id_val).strip() != str(gate_id).strip():
+    if not cf_gate_id_val or str(cf_gate_id_val).strip().upper() != str(gate_id).strip().upper():
         return {"status": "FAIL", "reason": f"cf_gate_id mismatch: expected '{gate_id}', got '{cf_gate_id_val}'"}
 
     # 3) cf_application_id == app_id
-    if not cf_application_id_val or str(cf_application_id_val).strip() != str(app_id).strip():
+    if not cf_application_id_val or str(cf_application_id_val).strip().upper() != str(app_id).strip().upper():
         return {"status": "FAIL", "reason": f"cf_application_id mismatch: expected '{app_id}', got '{cf_application_id_val}'"}
 
     # 4) cf_exception_approval_status == "DECISION MADE"
-    if not cf_exception_approval_status_val or str(cf_exception_approval_status_val).upper() != "DECISION MADE":
+    if not cf_exception_approval_status_val or str(cf_exception_approval_status_val).upper().upper() != "DECISION MADE":
         return {"status": "FAIL", "reason": f"cf_exception_approval_status is not 'DECISION MADE' (got '{cf_exception_approval_status_val}')"}
 
     # 5) cf_exception_approval_decision == "Approved"
-    if not cf_exception_approval_decision_val or str(cf_exception_approval_decision_val).strip().lower() != "approved".lower():
+    if not cf_exception_approval_decision_val or str(cf_exception_approval_decision_val).strip().upper() != "approved".upper():
         return {"status": "FAIL", "reason": f"cf_exception_approval_decision is not 'Approved' (got '{cf_exception_approval_decision_val}')"}
 
     # 6) cf_exception_expiry_date >= today
