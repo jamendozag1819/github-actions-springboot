@@ -1,28 +1,45 @@
+# ------------------------------------------------------------
+# Workflow: Security Scanning
+# Ejecuta un escaneo de seguridad usando Snyk y expone
+# los conteos de vulnerabilidades como outputs del workflow.
+# Puede ser invocado desde otros workflows vía "workflow_call".
+# ------------------------------------------------------------
 name: Security Scanning
 
 on:
   workflow_call:
+    # ---------
+    # Parámetros recibidos desde el workflow que lo invoque
+    # ---------
     inputs:
       java-version:
         type: string
-        default: "17"
+        default: "17"       # Versión de Java usada en el escaneo
 
+    # ---------
+    # Secrets requeridos
+    # Estos deben existir en el repositorio o la organización
+    # ---------
     secrets:
       SNYK_TOKEN:
-        required: true
+        required: true      # Token de autenticación para Snyk
       SNYK_ORG_ID:
-        required: true
+        required: true      # ID de la organización en Snyk
       JIRA_URL:
-        required: true
+        required: true      # URL del Jira (si alguna acción interna lo usa)
       JIRA_USER:
-        required: true
+        required: true      # Usuario de Jira
       JIRA_API_TOKEN:
-        required: true
+        required: true      # Token API para Jira
       APP_ID:
-        required: false
+        required: false     # Identificador opcional por app
       JIRA_PROJECT:
-        required: false
+        required: false     # Proyecto Jira opcional
 
+    # ---------
+    # Outputs del workflow completo
+    # Se basan en los outputs del job "snyk"
+    # ---------
     outputs:
       critical-count:
         value: ${{ jobs.snyk.outputs.critical }}
@@ -33,11 +50,15 @@ on:
       low-count:
         value: ${{ jobs.snyk.outputs.low }}
 
+# ------------------------------------------------------------
+# JOB PRINCIPAL: Snyk Scan
+# ------------------------------------------------------------
 jobs:
   snyk:
     name: Run Snyk Security Scan
     runs-on: ubuntu-latest
 
+    # Outputs del job → consumidos por el workflow a nivel superior
     outputs:
       critical: ${{ steps.extract.outputs.critical }}
       high: ${{ steps.extract.outputs.high }}
@@ -45,24 +66,40 @@ jobs:
       low: ${{ steps.extract.outputs.low }}
 
     steps:
+      # ---------
+      # Descarga el código del repositorio
+      # ---------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ---------
+      # Configura Java usando Temurin (Adoptium)
+      # ---------
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ inputs.java-version }}
 
+      # ---------
+      # Ejecuta el análisis Snyk usando un action personalizado
+      # (.github/actions/snyk-code-analysis)
+      # Se espera que genere un archivo snyk-report.json
+      # ---------
       - name: Run Snyk Scan
         uses: ./.github/actions/snyk-code-analysis
         with:
-          app-path: "."
+          app-path: "."                                # Directorio raíz del código
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
           snyk-project-name: "jamendozag1819_github-actions-springboot"
-          image-sha: ${{ github.sha }}
+          image-sha: ${{ github.sha }}                 # Referencia del commit analizado
 
+      # ---------
+      # Extrae los conteos de vulnerabilidades del archivo generado:
+      # snyk-report.json
+      # Se usa jq para filtrar por severidad.
+      # ---------
       - name: Extract Snyk results
         id: extract
         run: |

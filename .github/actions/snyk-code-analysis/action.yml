@@ -1,31 +1,54 @@
+# ------------------------------------------------------------
+# Composite Action: Snyk Scan
+# Ejecuta un escaneo de seguridad usando Snyk CLI y genera un
+# reporte JSON. También ejecuta la lógica de “gating” mediante
+# un script Python para validar umbrales de seguridad.
+# ------------------------------------------------------------
 name: "Snyk Scan"
 description: "Runs Snyk security scan and reports vulnerabilities"
 
+# ------------------------------------------------------------
+# Parámetros de entrada requeridos por la acción.
+# Son provistos por el workflow que llame a este composite.
+# ------------------------------------------------------------
 inputs:
   app-path:
     description: "Path of the project to scan"
     required: true
+
   snyk-token:
-    description: "snyk token"
-    required: true
-  snyk-org:
-    description: "snyk organization"
-    required: true
-  snyk-project-name:
-    description: "snyk project name"
-    required: true
-  image-sha:
-    description: "image-sha"
+    description: "Snyk authentication token"
     required: true
 
+  snyk-org:
+    description: "Snyk organization ID"
+    required: true
+
+  snyk-project-name:
+    description: "Snyk project name"
+    required: true
+
+  image-sha:
+    description: "Image / commit SHA used for tagging the scan"
+    required: true
+
+# ------------------------------------------------------------
+# Definición del composite action
+# ------------------------------------------------------------
 runs:
   using: "composite"
   steps:
 
+    # --------------------------------------------------------
+    # Instala el CLI de Snyk globalmente vía npm
+    # --------------------------------------------------------
     - name: Install Snyk CLI
       shell: bash
       run: npm install -g snyk > /dev/null
 
+    # --------------------------------------------------------
+    # Muestra información útil del entorno y configuración
+    # --------------------------------------------------------
     - name: Snyk Env Info
       shell: bash
       run: |
@@ -33,6 +56,11 @@ runs:
         echo "Project: ${{ inputs.snyk-project-name }}"
         echo "Image: myapp:${{ inputs.image-sha }}"
 
+    # --------------------------------------------------------
+    # Ejecuta el escaneo del contenedor usando Snyk
+    # Se genera un archivo JSON llamado `snyk-report.json`
+    # continue-on-error: true -> No falla el job si Snyk detecta vulnerabilidades
+    # --------------------------------------------------------
     - name: Run Snyk Scan (Container)
       shell: bash
       continue-on-error: true
@@ -49,8 +77,14 @@ runs:
           --project-name="${{ inputs.snyk-project-name }}" \
           --json-file-output=snyk-report.json || true
 
+        # Verificación del archivo generado
         ls -lh snyk-report.json || echo "❌ snyk-report.json NOT GENERATED"
 
+    # --------------------------------------------------------
+    # Ejecuta el proceso de Snyk Gating
+    # Este script valida umbrales y “aprueba/reprueba” el escaneo
+    # según reglas definidas en la config JSON.
+    # --------------------------------------------------------
     - name: Snyk Gating
       shell: bash
       env:

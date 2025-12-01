@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
-# Sonar + Governance Gates (gatr-08, gatr-09, gatr-14 + Jira exceptions)
+# ============================================================
+# Sonar + Governance Gates Validator
+#
+# Gates soportados:
+#   - gatr-08: Blocker issues en Sonar
+#   - gatr-09: Parámetros permitidos en sonar-project.properties
+#   - gatr-14: Validación de ramas permitidas para UAT/PROD
+#
+# Integración con Jira:
+#   El script valida automáticamente excepciones aprobadas en Jira
+#   cuando un gate falla. La excepción debe cumplir:
+#     - Project = GATR
+#     - cf_gate_id == gate_id fallado
+#     - cf_application_id == aplicación enviada
+#     - Status aprobación == DECISION MADE
+#     - Decision == Approved
+#     - Fecha de expiración válida
+#
+# Uso:
+#   python3 script.py --sonar-host ... --token ... --project-key ...
+# ============================================================
 
 import os
 import sys
@@ -10,14 +30,30 @@ import urllib.request
 import urllib.error
 import base64
 import re
+from datetime import datetime
 
-# ------------------------------------------------------------
+# ============================================================
 # HTTP Requests
-# ------------------------------------------------------------
+# ============================================================
 
 def fetch_json(url, user=None, token=None, is_jira=False, body=None):
+    """
+    Realiza una petición HTTP (GET o POST) y devuelve el JSON resultante.
+
+    Parámetros:
+        url       (str): URL de la petición.
+        user      (str): Usuario para Jira (solo si is_jira=True).
+        token     (str): Token para Jira o Sonar.
+        is_jira  (bool): Indica si la llamada va dirigida a Jira.
+        body     (dict): JSON para POST en Jira (solo is_jira=True).
+
+    Comportamiento:
+        - Jira usa Basic Auth con "user:token".
+        - Sonar usa Basic Auth con "token:".
+        - Para Jira Search API, si body != None → POST automático.
+    """
     try:
-        # Si es consulta Jira (POST con body)
+        # Construcción de request
         if is_jira and body is not None:
             Data = json.dumps(body).encode("utf-8")
             req = urllib.request.Request(url, data=Data, method="POST")
@@ -25,19 +61,16 @@ def fetch_json(url, user=None, token=None, is_jira=False, body=None):
         else:
             req = urllib.request.Request(url)
 
-        # Autorización
+        # Autorización correspondiente
         if is_jira:
-            # Basic Auth: user:token
             credentials = f"{user}:{token}"
             auth = base64.b64encode(credentials.encode()).decode()
         else:
-            # Sonar
             auth = base64.b64encode(f"{token}:".encode()).decode()
 
-        print("Authorization:", auth)
         req.add_header("Authorization", f"Basic {auth}")
 
-        # Llamada HTTP
+        # Realizar llamada HTTP
         with urllib.request.urlopen(req, timeout=30) as response:
             return json.load(response)
 
@@ -45,16 +78,18 @@ def fetch_json(url, user=None, token=None, is_jira=False, body=None):
         return {"error": str(e)}
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Sonar API
-# ------------------------------------------------------------
+# ============================================================
 
 def get_quality_gate_status(sonar_url, project_key, token):
+    """Consulta el estado del Quality Gate de un proyecto Sonar."""
     url = f"{sonar_url}/api/qualitygates/project_status?projectKey={project_key}"
     return fetch_json(url, token=token)
 
 
 def get_project_metrics(sonar_url, project_key, token):
+    """Obtiene métricas principales del proyecto."""
     metrics = ",".join([
         "bugs", "vulnerabilities", "security_hotspots", "code_smells",
         "coverage", "duplicated_lines_density",
@@ -65,15 +100,20 @@ def get_project_metrics(sonar_url, project_key, token):
 
 
 def convert_rating(value):
+    """Convierte ratings tipo A–E o 1–5 en escala numérica 1–5."""
     mapping = {"A": 1, "1": 1, "B": 2, "2": 2, "C": 3, "3": 3, "D": 4, "4": 4, "E": 5, "5": 5}
     return mapping.get(str(value).upper(), 5)
 
 
-# ------------------------------------------------------------
-# gatr-08 — Blocker issues
-# ------------------------------------------------------------
+# ============================================================
+# gatr-08 — Blocker Issues en Sonar
+# ============================================================
 
 def evaluate_gatr_08(quality_json):
+    """
+    Valida gatr-08: No deben existir 'blocker issues' cuando
+    el estado del Quality Gate = ERROR.
+    """
     status = quality_json.get("projectStatus", {}).get("status", "NONE")
     conditions = quality_json.get("projectStatus", {}).get("conditions", [])
 
@@ -88,9 +128,9 @@ def evaluate_gatr_08(quality_json):
     return {"gate": "gatr-08", "status": "PASS"}
 
 
-# ------------------------------------------------------------
+# ============================================================
 # gatr-09 — Sonar Allowed Parameters
-# ------------------------------------------------------------
+# ============================================================
 
 ALLOWED_PARAMS = [
     "sonar.coverage.exclusions",
@@ -103,8 +143,12 @@ BLOCKED_PARAMS = [
     "sonar.test.exclusions"
 ]
 
-
 def evaluate_gatr_09():
+    """
+    Validación gatr-09:
+    Solo se permiten parámetros específicos dentro del archivo
+    sonar-project.properties.
+    """
     used = []
 
     if os.path.exists("sonar-project.properties"):
@@ -130,11 +174,17 @@ def evaluate_gatr_09():
     return {"gate": "gatr-09", "status": "PASS"}
 
 
-# ------------------------------------------------------------
+# ============================================================
 # gatr-14 — Release Validation
-# ------------------------------------------------------------
+# ============================================================
 
 def evaluate_gatr_14(branch, environment):
+    """
+    Valida gatr-14:
+    - Para UAT/PROD solo pueden desplegar:
+        • main
+        • release/*
+    """
     if environment not in ("UAT", "PROD"):
         return {"gate": "gatr-14", "status": "PASS"}
 
@@ -155,17 +205,19 @@ def evaluate_gatr_14(branch, environment):
     return {"gate": "gatr-14", "status": "PASS"}
 
 
-from datetime import datetime
+# ============================================================
+# Utilidades Jira — extracción de valores de customfields
+# ============================================================
 
 def _extract_custom_value(fields, cf_id):
     """
-    Extrae de forma segura el valor "significativo" de un customfield.
+    Normaliza el valor devuelto por Jira para un customfield.
     Soporta:
-    - None
-    - string (ej. "GATR-9")
-    - dict con 'value' (ej. {"value":"Opción 1", "id":"10028"})
-    - dict con 'child' que contiene 'value' (cascade select)
-    - lista (devuelve el primer elemento si es relevante)
+      - string
+      - number
+      - dict con "value"
+      - dict con "child"
+      - lista
     """
     if fields is None:
         return None
@@ -173,44 +225,47 @@ def _extract_custom_value(fields, cf_id):
     if val is None:
         return None
 
-    # Si es string/number -> devolver directo
     if isinstance(val, (str, int, float)):
         return val
 
-    # Si es lista, intentar obtener valor del primer elemento
     if isinstance(val, list) and len(val) > 0:
         first = val[0]
-        # si es dict con keys conocidas
         if isinstance(first, (str, int, float)):
             return first
         val = first
 
-    # Si es dict y tiene 'value'
     if isinstance(val, dict):
-        # Caso: cascading select -> tiene 'child' con 'value'
         if "child" in val and isinstance(val["child"], dict) and "value" in val["child"]:
             return val["child"].get("value") or val["child"].get("id")
-        # Caso: opcion simple -> tiene 'value'
+
         if "value" in val:
             return val.get("value") or val.get("id")
-        # Caso: a veces vienen como { "id": "10029", "value": "Approved" } -> ya manejado
-        # Fallback a campo 'id'
+
         if "id" in val:
             return val.get("id")
+
     return None
 
 
+# ============================================================
+# Evaluación de EXCEPCIÓN en Jira
+# ============================================================
+
 def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     """
-    Consulta GET /issue/{gate_id} y valida:
-      project = GATES
-      cf_gate_id = gate_id
-      cf_application_id = app_id
-      cf_exception_approval_status = "DECISION MADE"
-      cf_exception_approval_decision = "Approved"
-      cf_exception_expiry_date >= today
-    Si todas pasan -> devuelve PASS_WITH_EXCEPTION con exception_id y expires
-    Si falla cualquiera -> devuelve FAIL
+    Valida si existe una excepción aprobada en Jira para un gate fallado.
+
+    Valida:
+        - Proyecto = GATR
+        - customfield_10107 == gate_id
+        - customfield_10109 == app_id
+        - customfield_10106 == DECISION MADE
+        - customfield_10110 == Approved
+        - customfield_10105 >= hoy
+
+    Devuelve:
+        - PASS_WITH_EXCEPTION si todo es válido
+        - FAIL si no cumple
     """
 
     print(f"🔎 Consultando excepción Jira con GET /issue/{gate_id}")
@@ -226,7 +281,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
     print("📥 Resultado Jira:", result)
 
-    # Errores en la llamada
+    # Manejo de errores en la llamada
     if "error" in result:
         return {"status": "ERROR", "reason": result["error"]}
     if result.get("errorMessages") or result.get("errors"):
@@ -234,83 +289,56 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
     fields = result.get("fields", {})
 
-    # ------------- Extraer valores necesarios -------------
-    # Proyecto (key)
-    project = fields.get("project", {})
-    project_key = project.get("key") if isinstance(project, dict) else project
-
-    # Ajusta estos ids si en tu instancia son diferentes.
-    # Según tu JSON de ejemplo:
-    #  - cf_gate_id  -> customfield_10109 (?)  (en tu ejemplo customfield_10109 contiene "GATR-9")
-    #  - cf_application_id -> customfield_10109  (si tienes otro mapping, cámbialo aquí)
-    #  - cf_exception_approval_status -> customfield_10106 (child.value => "DECISION MADE")
-    #  - cf_exception_approval_decision -> customfield_10110 (child.value => "Approved")
-    #  - cf_exception_expiry_date -> customfield_10105 (ej. "2025-12-31")
-    #
-    # Si tus customfield ids son otros, reemplaza las strings "customfield_XXXXX" abajo.
-
+    # IDs reales de tus customfields — AJUSTA SI CAMBIAN
     CF_GATE_ID = "customfield_10107"
     CF_APPLICATION_ID = "customfield_10109"
     CF_EXCEPTION_APPROVAL_STATUS = "customfield_10106"
     CF_EXCEPTION_APPROVAL_DECISION = "customfield_10110"
     CF_EXCEPTION_EXPIRY_DATE = "customfield_10105"
 
-    # Extraer cada valor (normalizado)
+    # Proyecto
+    project = fields.get("project", {})
+    project_key = project.get("key") if isinstance(project, dict) else project
+
+    # Extraer valores significativos
     cf_gate_id_val = _extract_custom_value(fields, CF_GATE_ID)
     cf_application_id_val = _extract_custom_value(fields, CF_APPLICATION_ID)
     cf_exception_approval_status_val = _extract_custom_value(fields, CF_EXCEPTION_APPROVAL_STATUS)
     cf_exception_approval_decision_val = _extract_custom_value(fields, CF_EXCEPTION_APPROVAL_DECISION)
     cf_exception_expiry_date_val = _extract_custom_value(fields, CF_EXCEPTION_EXPIRY_DATE)
 
-    print("🔍 Valores extraídos:")
-    print(" project_key =", project_key)
-    print(f" {CF_GATE_ID} =", cf_gate_id_val)
-    print(f" {CF_APPLICATION_ID} =", cf_application_id_val)
-    print(f" {CF_EXCEPTION_APPROVAL_STATUS} =", cf_exception_approval_status_val)
-    print(f" {CF_EXCEPTION_APPROVAL_DECISION} =", cf_exception_approval_decision_val)
-    print(f" {CF_EXCEPTION_EXPIRY_DATE} =", cf_exception_expiry_date_val)
+    # Validación proyecto
+    if str(project_key).upper() != "GATR":
+        return {"status": "FAIL", "reason": f"Project mismatch: expected 'GATR', got '{project_key}'"}
 
-    # ------------- Validaciones -------------
-    # 1) project == "GATES"
-    expected_project = "GATR"
-    if (not project_key) or (str(project_key).upper() != expected_project.upper()):
-        return {"status": "FAIL", "reason": f"Project mismatch: expected '{expected_project}', got '{project_key}'"}
-
-    # 2) cf_gate_id == gate_id  (acepta igualdad exacta o contener)
-    if not cf_gate_id_val or str(cf_gate_id_val).strip().upper() != str(gate_id).strip().upper():
+    # Validación gate_id
+    if str(cf_gate_id_val).strip().upper() != gate_id.upper():
         return {"status": "FAIL", "reason": f"cf_gate_id mismatch: expected '{gate_id}', got '{cf_gate_id_val}'"}
 
-    # 3) cf_application_id == app_id
-    if not cf_application_id_val or str(cf_application_id_val).strip().upper() != str(app_id).strip().upper():
+    # Validación aplicación
+    if str(cf_application_id_val).strip().upper() != str(app_id).strip().upper():
         return {"status": "FAIL", "reason": f"cf_application_id mismatch: expected '{app_id}', got '{cf_application_id_val}'"}
 
-    # 4) cf_exception_approval_status == "DECISION MADE"
-    if not cf_exception_approval_status_val or str(cf_exception_approval_status_val).upper().upper() != "DECISION MADE":
-        return {"status": "FAIL", "reason": f"cf_exception_approval_status is not 'DECISION MADE' (got '{cf_exception_approval_status_val}')"}
+    # Validación status aprobación
+    if str(cf_exception_approval_status_val).upper() != "DECISION MADE":
+        return {"status": "FAIL", "reason": "Approval status must be 'DECISION MADE'"}
 
-    # 5) cf_exception_approval_decision == "Approved"
-    if not cf_exception_approval_decision_val or str(cf_exception_approval_decision_val).strip().upper() != "approved".upper():
-        return {"status": "FAIL", "reason": f"cf_exception_approval_decision is not 'Approved' (got '{cf_exception_approval_decision_val}')"}
+    # Validación decisión
+    if str(cf_exception_approval_decision_val).upper() != "APPROVED":
+        return {"status": "FAIL", "reason": "Approval decision must be 'Approved'"}
 
-    # 6) cf_exception_expiry_date >= today
+    # Validación fecha expiración
     if not cf_exception_expiry_date_val:
-        return {"status": "FAIL", "reason": "cf_exception_expiry_date is missing"}
+        return {"status": "FAIL", "reason": "Missing expiry date"}
 
-    # Normalizar fecha: Jira puede devolver 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS...'
-    expiry_str = str(cf_exception_expiry_date_val)
     try:
-        # Tomar los primeros 10 chars si tiene timestamp
-        expiry_date = datetime.strptime(expiry_str[:10], "%Y-%m-%d").date()
+        expiry_date = datetime.strptime(str(cf_exception_expiry_date_val)[:10], "%Y-%m-%d").date()
     except Exception as e:
-        return {"status": "FAIL", "reason": f"cf_exception_expiry_date has invalid format: '{expiry_str}' ({e})"}
+        return {"status": "FAIL", "reason": f"Invalid expiry date: {e}"}
 
-    today = datetime.utcnow().date()
-    # Si quieres comparar en zona local, usa datetime.now().date()
+    if expiry_date < datetime.utcnow().date():
+        return {"status": "FAIL", "reason": f"Exception expired on {expiry_date}"}
 
-    if expiry_date < today:
-        return {"status": "FAIL", "reason": f"Exception expired on {expiry_date.isoformat()}"}
-
-    # ------------- Si llegamos aquí, todas las validaciones pasaron -------------
     return {
         "status": "PASS_WITH_EXCEPTION",
         "exception_id": result.get("key"),
@@ -318,12 +346,20 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
     }
 
 
-
-# ------------------------------------------------------------
+# ============================================================
 # MAIN
-# ------------------------------------------------------------
+# ============================================================
 
 def main():
+    """
+    Entrada principal.
+    Ejecuta:
+      1. Espera que Sonar termine (si --wait)
+      2. Valida gatr-08, gatr-09, gatr-14
+      3. Consulta excepciones Jira si un gate falla
+      4. Devuelve exit code apropiado
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--sonar-host", required=True)
     parser.add_argument("--token", required=True)
@@ -339,9 +375,7 @@ def main():
 
     args = parser.parse_args()
 
-    # ----------------------------------------------------
-    # WAIT UNTIL SONAR FINISHES PROCESSING
-    # ----------------------------------------------------
+    # --- WAIT UNTIL SONAR FINISHES ---
     if args.wait:
         print("Waiting for SonarCloud to finish computing...")
         for _ in range(60):  # 5 min
@@ -353,21 +387,19 @@ def main():
     else:
         data = get_quality_gate_status(args.sonar_host, args.project_key, args.token)
 
-    # ----------------------------------------------------
-    # Evaluate gates
-    # ----------------------------------------------------
+    # --- Evaluate gatr-08 ---
     r08 = evaluate_gatr_08(data)
     if r08["status"] == "FAIL":
         print("❌ gatr-08 FAILED:", r08["reason"])
         jira = evaluate_jira_exception(
             args.jira_url, args.jira_user, args.jira_token, "GATR-08", args.app_id
         )
-        print(f"Response jira evaluate: {jira}")
-        if jira["status"] == "PASS_WITH_EXCEPTION":
-            print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
-        else:
+        print("Response jira evaluate:", jira)
+        if jira["status"] != "PASS_WITH_EXCEPTION":
             sys.exit(2)
+        print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
 
+    # --- Evaluate gatr-09 ---
     r09 = evaluate_gatr_09()
     if r09["status"] == "FAIL":
         print("❌ gatr-09 FAILED:", r09["reason"])
@@ -375,23 +407,22 @@ def main():
         jira = evaluate_jira_exception(
             args.jira_url, args.jira_user, args.jira_token, "GATR-09", args.app_id
         )
-        print(f"Response jira evaluate: {jira}")
-        if jira["status"] == "PASS_WITH_EXCEPTION":
-            print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
-        else:
+        print("Response jira evaluate:", jira)
+        if jira["status"] != "PASS_WITH_EXCEPTION":
             sys.exit(2)
+        print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
 
+    # --- Evaluate gatr-14 ---
     r14 = evaluate_gatr_14(args.branch, args.environment)
     if r14["status"] == "FAIL":
         print("❌ gatr-14 FAILED:", r14["reason"])
         jira = evaluate_jira_exception(
             args.jira_url, args.jira_user, args.jira_token, "GATR-14", args.app_id
         )
-        print(f"Response jira evaluate: {jira}")
-        if jira["status"] == "PASS_WITH_EXCEPTION":
-            print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
-        else:
+        print("Response jira evaluate:", jira)
+        if jira["status"] != "PASS_WITH_EXCEPTION":
             sys.exit(2)
+        print(f"⚠ Jira Exception ACCEPTED ({jira['exception_id']}) — Continuing.")
 
     print("✅ All gates PASSED")
     sys.exit(0)
