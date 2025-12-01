@@ -272,7 +272,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
     # ------------- Validaciones -------------
     # 1) project == "GATES"
-    expected_project = "GATES"
+    expected_project = "GATR"
     if (not project_key) or (str(project_key).upper() != expected_project.upper()):
         return {"status": "FAIL", "reason": f"Project mismatch: expected '{expected_project}', got '{project_key}'"}
 
