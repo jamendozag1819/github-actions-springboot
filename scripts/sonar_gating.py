@@ -19,8 +19,8 @@ def fetch_json(url, user=None, token=None, is_jira=False, body=None):
     try:
         # Si es consulta Jira (POST con body)
         if is_jira and body is not None:
-            data = json.dumps(body).encode("utf-8")
-            req = urllib.request.Request(url, data=data, method="POST")
+            Data = json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(url, data=Data, method="POST")
             req.add_header("Content-Type", "application/json")
         else:
             req = urllib.request.Request(url)
@@ -156,7 +156,7 @@ def evaluate_jira_exception(jira_url, jira_user, jira_token, gate_id, app_id):
 
     Body = {
         f"jql": "key = {gate_id}",
-        "fields": "["summary","status"]"
+        "fields": ["summary","status"]
     }
     print(f"URL : ",api_url)
     print(f"Body : ",Body)    
