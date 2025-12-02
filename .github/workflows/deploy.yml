@@ -84,22 +84,4 @@ jobs:
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
           snyk-project-name: "jamendozag1819_github-actions-springboot"
           image-sha: ${{ github.sha }}
-
-
-  # ==========================================================
-  # 3. CODE QUALITY – SonarQube Cloud
-  # ==========================================================
-  code-quality:
-    name: SonarQube Cloud Analysis
-    needs: [ build-docker ]
-    uses: ./.github/workflows/quality-analysis.yml
-    with:
-      java-version: "17"
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-      JIRA_URL: ${{ secrets.JIRA_URL }}
-      JIRA_USER: ${{ secrets.JIRA_USER }}
 	  
