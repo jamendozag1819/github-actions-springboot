@@ -84,4 +84,3 @@ jobs:
           snyk-org: ${{ secrets.SNYK_ORG_ID }}
           snyk-project-name: "jamendozag1819_github-actions-springboot"
           image-sha: ${{ github.sha }}
-	  
